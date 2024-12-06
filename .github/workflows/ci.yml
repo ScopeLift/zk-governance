@@ -102,7 +102,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ./scripts
+        working-directory: ./l2-contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
