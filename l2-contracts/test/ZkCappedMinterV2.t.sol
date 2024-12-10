@@ -295,7 +295,7 @@ contract Close is ZkCappedMinterV2Test {
     _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__NotPauser.selector, _nonPauser));
+    vm.expectRevert(_formatAccessControlError(_nonPauser, PAUSER_ROLE));
     vm.prank(_nonPauser);
     cappedMinter.close();
   }
