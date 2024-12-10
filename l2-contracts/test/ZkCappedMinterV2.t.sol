@@ -17,6 +17,11 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
     token.grantRole(MINTER_ROLE, address(cappedMinter));
     return cappedMinter;
   }
+
+  function _grantMinterRole(ZkCappedMinterV2 _cappedMinter, address _cappedMinterAdmin, address _minter) internal {
+    vm.prank(_cappedMinterAdmin);
+    _cappedMinter.grantRole(MINTER_ROLE, _minter);
+  }
 }
 
 contract Constructor is ZkCappedMinterV2Test {
@@ -47,8 +52,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
@@ -75,8 +79,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
 
     vm.startPrank(_minter);
     cappedMinter.mint(_receiver1, _amount1);
@@ -113,8 +116,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _cap);
