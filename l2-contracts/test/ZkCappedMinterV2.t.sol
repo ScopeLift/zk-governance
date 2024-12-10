@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import {ZkTokenTest} from "test/utils/ZkTokenTest.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IMintableAndDelegatable} from "src/interfaces/IMintableAndDelegatable.sol";
 import {ZkCappedMinterV2} from "src/ZkCappedMinterV2.sol";
 import {console2} from "forge-std/Test.sol";
@@ -16,6 +17,22 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
     vm.prank(admin);
     token.grantRole(MINTER_ROLE, address(cappedMinter));
     return cappedMinter;
+  }
+
+  function _grantMinterRole(ZkCappedMinterV2 _cappedMinter, address _cappedMinterAdmin, address _minter) internal {
+    vm.prank(_cappedMinterAdmin);
+    _cappedMinter.grantRole(MINTER_ROLE, _minter);
+  }
+
+  function _formatAccessControlError(address account, bytes32 role) internal pure returns (bytes memory) {
+    return bytes(
+      string.concat(
+        "AccessControl: account ",
+        Strings.toHexString(uint160(account), 20),
+        " is missing role ",
+        Strings.toHexString(uint256(role))
+      )
+    );
   }
 }
 
@@ -48,8 +65,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
@@ -77,8 +93,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
 
     vm.startPrank(_minter);
     cappedMinter.mint(_receiver1, _amount1);
@@ -96,7 +111,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__NotMinter.selector, _nonMinter));
+    vm.expectRevert(_formatAccessControlError(_nonMinter, MINTER_ROLE));
     vm.prank(_nonMinter);
     cappedMinter.mint(_nonMinter, _cap);
   }
@@ -113,8 +128,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _cap);
@@ -139,7 +153,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__NotMinter.selector, _admin));
+    vm.expectRevert(_formatAccessControlError(_admin, MINTER_ROLE));
     vm.prank(_admin);
     cappedMinter.mint(_receiver, _amount);
   }
@@ -189,7 +203,7 @@ contract Pause is ZkCappedMinterV2Test {
     vm.prank(_admin);
     cappedMinter.revokeRole(PAUSER_ROLE, _admin);
 
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__NotPauser.selector, _admin));
+    vm.expectRevert(_formatAccessControlError(_admin, PAUSER_ROLE));
     vm.prank(_admin);
     cappedMinter.pause();
   }
@@ -240,7 +254,7 @@ contract Unpause is ZkCappedMinterV2Test {
     vm.prank(_admin);
     cappedMinter.revokeRole(PAUSER_ROLE, _admin);
 
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__NotPauser.selector, _admin));
+    vm.expectRevert(_formatAccessControlError(_admin, PAUSER_ROLE));
     vm.prank(_admin);
     cappedMinter.unpause();
   }
