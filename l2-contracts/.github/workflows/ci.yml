@@ -36,7 +36,7 @@ jobs:
       - name: Install the dependencies
         run: npm install
 
-      - name: Compile
+      - name: Buld contracts
         run: npm run compile
 
       - name: Run tests
