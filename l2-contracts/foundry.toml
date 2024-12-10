@@ -1,5 +1,6 @@
 [profile.default]
   evm_version = "paris"
+  fs_permissions = [{ access = "read", path = "./zkout" }]
   fuzz = { runs = 50 }
   optimizer = true
   optimizer_runs = 10_000_000
@@ -8,11 +9,10 @@
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
     "@openzeppelin/foundry-upgrades/=lib/openzeppelin-foundry-upgrades/src/",
     "@murky/=lib/murky/",
-    "src/=src/"
+    "src/=src/",
   ]
   solc_version = "0.8.24"
   verbosity = 3
-  fs_permissions = [{ access = "read", path = "./zkout" }]
 
 [profile.ci]
   fuzz = { runs = 5000 }
