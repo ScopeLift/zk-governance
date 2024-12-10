@@ -2,10 +2,10 @@
 pragma solidity 0.8.24;
 
 import {ZkTokenTest} from "test/utils/ZkTokenTest.sol";
+import {Strings} from "@openzeppelin-contracts/contracts/utils/Strings.sol";
 import {IMintableAndDelegatable} from "src/interfaces/IMintableAndDelegatable.sol";
 import {ZkCappedMinterV2} from "src/ZkCappedMinterV2.sol";
 import {console2} from "forge-std/Test.sol";
-import {Strings} from "lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract ZkCappedMinterV2Test is ZkTokenTest {
   function setUp() public virtual override {
