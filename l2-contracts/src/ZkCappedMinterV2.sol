@@ -40,12 +40,6 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @notice Error for when the cap is exceeded.
   error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
 
-  /// @notice Error for when the account does not have minter role.
-  error ZkCappedMinterV2__NotMinter(address account);
-
-  /// @notice Error for when the account does not have pauser role.
-  error ZkCappedMinterV2__NotPauser(address account);
-
   /// @notice Error for when the contract is closed.
   error ZkCappedMinterV2__ContractClosed();
 
@@ -58,10 +52,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @notice Error for when the start time is greater than or equal to expiration time, or start time is in the past.
   error ZkCappedMinterV2__InvalidTime();
 
-  /// @notice Error for when a non-admin tries to set the metadata URI
-  error ZkCappedMinterV2__NotAdmin(address account);
-
-  /// @notice Constructor for a new ZkCappedMinter contract
+  /// @notice Constructor for a new ZkCappedMinterV2 contract
   /// @param _token The token contract where tokens will be minted.
   /// @param _admin The address that will be granted the admin role.
   /// @param _cap The maximum number of tokens that may be minted by the ZkCappedMinter.
@@ -92,16 +83,14 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
 
   /// @notice Pauses token minting
   function pause() external {
-    _revertIfNotPauser(msg.sender);
+    _checkRole(PAUSER_ROLE, msg.sender);
     _pause();
   }
 
   /// @notice Unpauses token minting
   function unpause() external {
-    _revertIfNotPauser(msg.sender);
-    if (closed) {
-      revert ZkCappedMinterV2__ContractClosed();
-    }
+    _revertIfClosed();
+    _checkRole(PAUSER_ROLE, msg.sender);
     _unpause();
   }
 
@@ -109,9 +98,8 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @param _to The address that will receive the new tokens.
   /// @param _amount The quantity of tokens, in raw decimals, that will be created.
   function mint(address _to, uint256 _amount) external {
-    if (closed) {
-      revert ZkCappedMinterV2__ContractClosed();
-    }
+    _revertIfClosed();
+
     if (block.timestamp < START_TIME) {
       revert ZkCappedMinterV2__NotStarted();
     }
@@ -119,24 +107,10 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
       revert ZkCappedMinterV2__Expired();
     }
     _requireNotPaused();
-    _revertIfNotMinter(msg.sender);
+    _checkRole(MINTER_ROLE, msg.sender);
     _revertIfCapExceeded(_amount);
     minted += _amount;
     TOKEN.mint(_to, _amount);
-  }
-
-  /// @notice Reverts if the account does not have minter role.
-  function _revertIfNotMinter(address account) internal view {
-    if (!hasRole(MINTER_ROLE, account)) {
-      revert ZkCappedMinterV2__NotMinter(account);
-    }
-  }
-
-  /// @notice Reverts if the account does not have pauser role.
-  function _revertIfNotPauser(address account) internal view {
-    if (!hasRole(PAUSER_ROLE, account)) {
-      revert ZkCappedMinterV2__NotPauser(account);
-    }
   }
 
   /// @notice Reverts if the amount of new tokens will increase the minted tokens beyond the mint cap.
@@ -147,11 +121,18 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
     }
   }
 
+  /// @notice Reverts if the contract is closed.
+  function _revertIfClosed() internal view {
+    if (closed) {
+      revert ZkCappedMinterV2__ContractClosed();
+    }
+  }
+
   /// @notice Permanently closes the contract, preventing any future minting.
   /// @dev Once closed, the contract cannot be reopened and all minting operations will be permanently blocked.
   /// @dev Only callable by accounts with the PAUSER_ROLE.
   function close() external {
-    _revertIfNotPauser(msg.sender);
+    _checkRole(PAUSER_ROLE, msg.sender);
     closed = true;
     _pause();
   }
@@ -160,9 +141,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @param _uri The new metadata URI
   /// @dev Only callable by addresses with the DEFAULT_ADMIN_ROLE
   function setMetadataURI(string memory _uri) external {
-    if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
-      revert ZkCappedMinterV2__NotAdmin(msg.sender);
-    }
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     metadataURI = _uri;
     emit MetadataURISet(_uri);
   }
