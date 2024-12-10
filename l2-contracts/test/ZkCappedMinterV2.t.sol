@@ -141,6 +141,7 @@ contract Mint is ZkCappedMinterV2Test {
     public
   {
     _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
+    vm.assume(_cap > 0);
     _amount = bound(_amount, 1, _cap);
     vm.assume(_admin != address(0));
     vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
