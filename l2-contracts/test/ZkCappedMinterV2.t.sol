@@ -5,6 +5,7 @@ import {ZkTokenTest} from "test/utils/ZkTokenTest.sol";
 import {IMintableAndDelegatable} from "src/interfaces/IMintableAndDelegatable.sol";
 import {ZkCappedMinterV2} from "src/ZkCappedMinterV2.sol";
 import {console2} from "forge-std/Test.sol";
+import {Strings} from "lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract ZkCappedMinterV2Test is ZkTokenTest {
   function setUp() public virtual override {
@@ -99,7 +100,16 @@ contract Mint is ZkCappedMinterV2Test {
     vm.assume(_nonMinter != address(0));
     vm.assume(!cappedMinter.hasRole(MINTER_ROLE, _nonMinter));
 
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__Unauthorized.selector, _nonMinter));
+    vm.expectRevert(
+      bytes(
+        string.concat(
+          "AccessControl: account ",
+          Strings.toHexString(uint160(_nonMinter), 20),
+          " is missing role ",
+          Strings.toHexString(uint256(MINTER_ROLE))
+        )
+      )
+    );
     vm.prank(_nonMinter);
     cappedMinter.mint(_nonMinter, _cap);
   }
@@ -137,7 +147,16 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__Unauthorized.selector, _admin));
+    vm.expectRevert(
+      bytes(
+        string.concat(
+          "AccessControl: account ",
+          Strings.toHexString(uint160(_admin), 20),
+          " is missing role ",
+          Strings.toHexString(uint256(MINTER_ROLE))
+        )
+      )
+    );
     vm.prank(_admin);
     cappedMinter.mint(_receiver, _amount);
   }

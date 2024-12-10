@@ -23,9 +23,6 @@ contract ZkCappedMinterV2 is AccessControl {
   /// @notice Error for when the cap is exceeded.
   error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
 
-  /// @notice Error for when the account is unauthorized.
-  error ZkCappedMinterV2__Unauthorized(address account);
-
   /// @notice Constructor for a new ZkCappedMinterV2 contract
   /// @param _token The token contract where tokens will be minted.
   /// @param _admin The address that will be granted the admin role.
@@ -41,17 +38,10 @@ contract ZkCappedMinterV2 is AccessControl {
   /// @param _to The address that will receive the new tokens.
   /// @param _amount The quantity of tokens, in raw decimals, that will be created.
   function mint(address _to, uint256 _amount) external {
-    _revertIfUnauthorized();
+    _checkRole(MINTER_ROLE, msg.sender);
     _revertIfCapExceeded(_amount);
     minted += _amount;
     TOKEN.mint(_to, _amount);
-  }
-
-  /// @notice Reverts if the account is unauthorized.
-  function _revertIfUnauthorized() internal view {
-    if (!hasRole(MINTER_ROLE, msg.sender)) {
-      revert ZkCappedMinterV2__Unauthorized(msg.sender);
-    }
   }
 
   /// @notice Reverts if the amount of new tokens will increase the minted tokens beyond the mint cap.
