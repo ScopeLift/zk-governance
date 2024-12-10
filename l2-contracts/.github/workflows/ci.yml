@@ -36,9 +36,6 @@ jobs:
       - name: Install the dependencies
         run: npm install
 
-      - name: Buld contracts
-        run: npm run compile
-
       - name: Run tests
         run: forge test --no-match-path .integration.t.sol
 
