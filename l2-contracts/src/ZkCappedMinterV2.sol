@@ -25,13 +25,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @notice Error for when the cap is exceeded.
   error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
 
-  /// @notice Error for when the account does not have minter role.
-  error ZkCappedMinterV2__NotMinter(address account);
-
-  /// @notice Error for when the account does not have pauser role.
-  error ZkCappedMinterV2__NotPauser(address account);
-
-  /// @notice Constructor for a new ZkCappedMinter contract
+  /// @notice Constructor for a new ZkCappedMinterV2 contract
   /// @param _token The token contract where tokens will be minted.
   /// @param _admin The address that will be granted the admin role.
   /// @param _cap The maximum number of tokens that may be minted by the ZkCappedMinter.
@@ -45,13 +39,13 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
 
   /// @notice Pauses token minting
   function pause() external {
-    _revertIfNotPauser(msg.sender);
+    _checkRole(PAUSER_ROLE, msg.sender);
     _pause();
   }
 
   /// @notice Unpauses token minting
   function unpause() external {
-    _revertIfNotPauser(msg.sender);
+    _checkRole(PAUSER_ROLE, msg.sender);
     _unpause();
   }
 
@@ -60,24 +54,10 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @param _amount The quantity of tokens, in raw decimals, that will be created.
   function mint(address _to, uint256 _amount) external {
     _requireNotPaused();
-    _revertIfNotMinter(msg.sender);
+    _checkRole(MINTER_ROLE, msg.sender);
     _revertIfCapExceeded(_amount);
     minted += _amount;
     TOKEN.mint(_to, _amount);
-  }
-
-  /// @notice Reverts if the account does not have minter role.
-  function _revertIfNotMinter(address account) internal view {
-    if (!hasRole(MINTER_ROLE, account)) {
-      revert ZkCappedMinterV2__NotMinter(account);
-    }
-  }
-
-  /// @notice Reverts if the account does not have pauser role.
-  function _revertIfNotPauser(address account) internal view {
-    if (!hasRole(PAUSER_ROLE, account)) {
-      revert ZkCappedMinterV2__NotPauser(account);
-    }
   }
 
   /// @notice Reverts if the amount of new tokens will increase the minted tokens beyond the mint cap.
