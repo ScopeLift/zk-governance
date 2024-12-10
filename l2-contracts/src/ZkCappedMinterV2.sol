@@ -26,7 +26,7 @@ contract ZkCappedMinterV2 is AccessControl {
   /// @notice Error for when the account is unauthorized.
   error ZkCappedMinterV2__Unauthorized(address account);
 
-  /// @notice Constructor for a new ZkCappedMinter contract
+  /// @notice Constructor for a new ZkCappedMinterV2 contract
   /// @param _token The token contract where tokens will be minted.
   /// @param _admin The address that will be granted the admin role.
   /// @param _cap The maximum number of tokens that may be minted by the ZkCappedMinter.
