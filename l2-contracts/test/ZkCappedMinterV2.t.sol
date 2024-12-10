@@ -23,6 +23,17 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
     vm.prank(_cappedMinterAdmin);
     _cappedMinter.grantRole(MINTER_ROLE, _minter);
   }
+
+  function _formatAccessControlError(address account, bytes32 role) internal pure returns (bytes memory) {
+    return bytes(
+      string.concat(
+        "AccessControl: account ",
+        Strings.toHexString(uint160(account), 20),
+        " is missing role ",
+        Strings.toHexString(uint256(role))
+      )
+    );
+  }
 }
 
 contract Constructor is ZkCappedMinterV2Test {
@@ -100,16 +111,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "AccessControl: account ",
-          Strings.toHexString(uint160(_nonMinter), 20),
-          " is missing role ",
-          Strings.toHexString(uint256(MINTER_ROLE))
-        )
-      )
-    );
+    vm.expectRevert(_formatAccessControlError(_nonMinter, MINTER_ROLE));
     vm.prank(_nonMinter);
     cappedMinter.mint(_nonMinter, _cap);
   }
@@ -151,16 +153,7 @@ contract Mint is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "AccessControl: account ",
-          Strings.toHexString(uint160(_admin), 20),
-          " is missing role ",
-          Strings.toHexString(uint256(MINTER_ROLE))
-        )
-      )
-    );
+    vm.expectRevert(_formatAccessControlError(_admin, MINTER_ROLE));
     vm.prank(_admin);
     cappedMinter.mint(_receiver, _amount);
   }
@@ -210,16 +203,7 @@ contract Pause is ZkCappedMinterV2Test {
     vm.prank(_admin);
     cappedMinter.revokeRole(PAUSER_ROLE, _admin);
 
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "AccessControl: account ",
-          Strings.toHexString(uint160(_admin), 20),
-          " is missing role ",
-          Strings.toHexString(uint256(PAUSER_ROLE))
-        )
-      )
-    );
+    vm.expectRevert(_formatAccessControlError(_admin, PAUSER_ROLE));
     vm.prank(_admin);
     cappedMinter.pause();
   }
@@ -270,16 +254,7 @@ contract Unpause is ZkCappedMinterV2Test {
     vm.prank(_admin);
     cappedMinter.revokeRole(PAUSER_ROLE, _admin);
 
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "AccessControl: account ",
-          Strings.toHexString(uint160(_admin), 20),
-          " is missing role ",
-          Strings.toHexString(uint256(PAUSER_ROLE))
-        )
-      )
-    );
+    vm.expectRevert(_formatAccessControlError(_admin, PAUSER_ROLE));
     vm.prank(_admin);
     cappedMinter.unpause();
   }
