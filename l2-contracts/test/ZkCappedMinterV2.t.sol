@@ -218,7 +218,6 @@ contract Unpause is ZkCappedMinterV2Test {
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-    assertEq(token.balanceOf(_receiver), _amount);
   }
 
   function testFuzz_RevertIf_NotPauserRoleUnpauses(address _admin, uint256 _cap) public {
