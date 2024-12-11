@@ -46,7 +46,7 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
         "AccessControl: account ",
         Strings.toHexString(uint160(account), 20),
         " is missing role ",
-        Strings.toHexString(uint256(role))
+        Strings.toHexString(uint256(role), 32)
       )
     );
   }
@@ -586,7 +586,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
     ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
 
     vm.prank(_nonAdmin);
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__NotAdmin.selector, _nonAdmin));
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
     cappedMinter.setMetadataURI(_uri);
   }
 }
