@@ -59,8 +59,7 @@ contract Mint is ZkCappedMinterV2Test {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
     _amount = bound(_amount, 1, MAX_MINT_SUPPLY);
     vm.assume(_cap > _amount);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    vm.assume(_minter != address(0));
+    vm.assume(_receiver != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
@@ -84,10 +83,8 @@ contract Mint is ZkCappedMinterV2Test {
     vm.assume(_amount1 < MAX_MINT_SUPPLY / 2);
     vm.assume(_amount2 < MAX_MINT_SUPPLY / 2);
     vm.assume(_amount1 + _amount2 < _cap);
-    vm.assume(_receiver1 != address(0) && _receiver1 != initMintReceiver);
-    vm.assume(_receiver2 != address(0) && _receiver2 != initMintReceiver);
+    vm.assume(_receiver1 != address(0) && _receiver2 != address(0));
     vm.assume(_receiver1 != _receiver2);
-    vm.assume(_minter != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
@@ -104,8 +101,6 @@ contract Mint is ZkCappedMinterV2Test {
 
   function testFuzz_RevertIf_MintAttemptedByNonMinter(address _admin, address _nonMinter, uint256 _cap) public {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
-    vm.assume(_admin != address(0));
-    vm.assume(_nonMinter != address(0) && _nonMinter != _admin);
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
@@ -121,8 +116,7 @@ contract Mint is ZkCappedMinterV2Test {
     uint256 _cap
   ) public {
     _cap = bound(_cap, 4, MAX_MINT_SUPPLY);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    vm.assume(_minter != address(0));
+    vm.assume(_receiver != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
 
@@ -145,8 +139,7 @@ contract Mint is ZkCappedMinterV2Test {
   ) public {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
     _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    vm.assume(_receiver != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
@@ -166,9 +159,7 @@ contract Pause is ZkCappedMinterV2Test {
   ) public {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
     _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_minter != address(0) && _minter != _admin);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    vm.assume(_receiver != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
@@ -191,7 +182,6 @@ contract Pause is ZkCappedMinterV2Test {
 
   function testFuzz_RevertIf_NotPauserRolePauses(address _admin, uint256 _cap) public {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
-    vm.assume(_admin != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
@@ -215,9 +205,7 @@ contract Unpause is ZkCappedMinterV2Test {
   ) public {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
     _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_minter != address(0) && _minter != _admin);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    vm.assume(_receiver != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
@@ -237,7 +225,6 @@ contract Unpause is ZkCappedMinterV2Test {
 
   function testFuzz_RevertIf_NotPauserRoleUnpauses(address _admin, uint256 _cap) public {
     _cap = bound(_cap, 1, MAX_MINT_SUPPLY);
-    vm.assume(_admin != address(0));
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
