@@ -164,8 +164,7 @@ contract Pause is ZkCappedMinterV2Test {
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
     // Grant minter role and verify minting works
-    vm.prank(_admin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _admin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
@@ -209,8 +208,7 @@ contract Unpause is ZkCappedMinterV2Test {
 
     ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
 
-    vm.prank(_admin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
+    _grantMinterRole(cappedMinter, _admin, _minter);
 
     vm.prank(_admin);
     cappedMinter.pause();
