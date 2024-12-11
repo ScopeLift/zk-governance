@@ -143,6 +143,23 @@ contract Pause is ZkCappedMinterV2Test {
     cappedMinter.mint(_receiver, _amount);
   }
 
+  function testFuzz_CorrectlyPausesMintsWhenTogglingPause(address _minter, address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
+
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
+
+    vm.startPrank(cappedMinterAdmin);
+    cappedMinter.pause();
+    cappedMinter.unpause();
+    cappedMinter.pause();
+    vm.stopPrank();
+
+    vm.expectRevert("Pausable: paused");
+    vm.prank(_minter);
+    cappedMinter.mint(_receiver, _amount);
+  }
+
   function testFuzz_RevertIf_NotPauserRolePauses(uint256 _amount) public {
     _amount = bound(_amount, 1, DEFAULT_CAP);
 
@@ -169,23 +186,6 @@ contract Unpause is ZkCappedMinterV2Test {
     vm.prank(cappedMinterAdmin);
     cappedMinter.unpause();
 
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _amount);
-  }
-
-  function testFuzz_CorrectlyPausesMintsWhenTogglingPause(address _minter, address _receiver, uint256 _amount) public {
-    _amount = bound(_amount, 1, DEFAULT_CAP);
-    vm.assume(_receiver != address(0));
-
-    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
-
-    vm.startPrank(cappedMinterAdmin);
-    cappedMinter.pause();
-    cappedMinter.unpause();
-    cappedMinter.pause();
-    vm.stopPrank();
-
-    vm.expectRevert("Pausable: paused");
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
   }
