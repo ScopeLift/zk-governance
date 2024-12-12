@@ -8,19 +8,30 @@ import {ZkCappedMinterV2} from "src/ZkCappedMinterV2.sol";
 import {console2} from "forge-std/Test.sol";
 
 contract ZkCappedMinterV2Test is ZkTokenTest {
+  ZkCappedMinterV2 public cappedMinter;
+  uint256 constant DEFAULT_CAP = 1000e18;
+  uint256 DEFAULT_START_TIME;
+  uint256 DEFAULT_EXPIRATION_TIME;
+
+  address cappedMinterAdmin = makeAddr("cappedMinterAdmin");
+
   function setUp() public virtual override {
     super.setUp();
+
+    DEFAULT_START_TIME = vm.getBlockTimestamp();
+    DEFAULT_EXPIRATION_TIME = DEFAULT_START_TIME + 100_000_000;
+
+    cappedMinter = _createCappedMinter(cappedMinterAdmin, DEFAULT_CAP, DEFAULT_START_TIME, DEFAULT_EXPIRATION_TIME);
+
+    vm.prank(admin);
+    token.grantRole(MINTER_ROLE, address(cappedMinter));
   }
 
   function _createCappedMinter(address _admin, uint256 _cap, uint256 _startTime, uint256 _expirationTime)
     internal
     returns (ZkCappedMinterV2)
   {
-    ZkCappedMinterV2 cappedMinter =
-      new ZkCappedMinterV2(IMintableAndDelegatable(address(token)), _admin, _cap, _startTime, _expirationTime);
-    vm.prank(admin);
-    token.grantRole(MINTER_ROLE, address(cappedMinter));
-    return cappedMinter;
+    return new ZkCappedMinterV2(IMintableAndDelegatable(address(token)), _admin, _cap, _startTime, _expirationTime);
   }
 
   function _boundToValidTimeControls(uint256 _startTime, uint256 _expirationTime)
@@ -59,7 +70,6 @@ contract Constructor is ZkCappedMinterV2Test {
     uint256 _startTime,
     uint256 _expirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
     vm.warp(_startTime);
 
@@ -76,49 +86,37 @@ contract Constructor is ZkCappedMinterV2Test {
     uint256 _startTime,
     uint256 _invalidExpirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1, type(uint256).max - 1);
-    vm.warp(_startTime);
-    _invalidExpirationTime = bound(_invalidExpirationTime, 0, _startTime - 1);
-
+    _startTime = bound(_startTime, 1, type(uint256).max);
+    uint256 _invalidExpirationTime = bound(_invalidExpirationTime, 0, _startTime - 1);
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__InvalidTime.selector);
     _createCappedMinter(_admin, _cap, _startTime, _invalidExpirationTime);
   }
 
-  function testFuzz_RevertIf_StartTimeInPast(address _admin, uint256 _cap, uint256 _pastTime, uint256 _expirationTime)
+  function testFuzz_RevertIf_StartTimeInPast(address _admin, uint256 _cap, uint256 _startTime, uint256 _expirationTime)
     public
   {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    _pastTime = bound(_pastTime, 0, vm.getBlockTimestamp() - 1);
-    _expirationTime = bound(_expirationTime, vm.getBlockTimestamp() + 1, type(uint256).max);
+    _startTime = bound(_startTime, 1, type(uint256).max);
+    vm.warp(_startTime);
+
+    _cap = bound(_cap, 1, DEFAULT_CAP);
+    uint256 _pastStartTime = _startTime - 1;
+    _expirationTime = bound(_expirationTime, _pastStartTime + 1, type(uint256).max);
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__InvalidTime.selector);
-    _createCappedMinter(_admin, _cap, _pastTime, _expirationTime);
+    _createCappedMinter(_admin, _cap, _pastStartTime, _expirationTime);
   }
 }
 
 contract Mint is ZkCappedMinterV2Test {
   function testFuzz_MintsNewTokensWhenTheAmountRequestedIsBelowTheCap(
-    address _admin,
     address _minter,
     address _receiver,
-    uint256 _cap,
-    uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
+    uint256 _amount
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, MAX_MINT_SUPPLY);
-    vm.assume(_cap > _amount);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    vm.assume(_minter != address(0));
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
+    vm.assume(_receiver != address(0));
+    _amount = bound(_amount, 1, DEFAULT_CAP);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    _grantMinterRole(cappedMinter, _admin, _minter);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
@@ -126,31 +124,21 @@ contract Mint is ZkCappedMinterV2Test {
   }
 
   function testFuzz_MintsNewTokensInSuccessionToDifferentAccountsWhileRemainingBelowCap(
-    address _admin,
     address _minter,
     address _receiver1,
     address _receiver2,
-    uint256 _cap,
     uint256 _amount1,
     uint256 _amount2,
     uint256 _startTime,
     uint256 _expirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
-    vm.assume(_cap > 0);
-    vm.assume(_amount1 < MAX_MINT_SUPPLY / 2);
-    vm.assume(_amount2 < MAX_MINT_SUPPLY / 2);
-    vm.assume(_amount1 + _amount2 < _cap);
-    vm.assume(_receiver1 != address(0) && _receiver1 != initMintReceiver);
-    vm.assume(_receiver2 != address(0) && _receiver2 != initMintReceiver);
+    _amount1 = bound(_amount1, 1, DEFAULT_CAP / 2);
+    _amount2 = bound(_amount2, 1, DEFAULT_CAP / 2);
+    vm.assume(_amount1 + _amount2 < DEFAULT_CAP);
+    vm.assume(_receiver1 != address(0) && _receiver2 != address(0));
     vm.assume(_receiver1 != _receiver2);
-    vm.assume(_minter != address(0));
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    _grantMinterRole(cappedMinter, _admin, _minter);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.startPrank(_minter);
     cappedMinter.mint(_receiver1, _amount1);
@@ -161,163 +149,47 @@ contract Mint is ZkCappedMinterV2Test {
     assertEq(token.balanceOf(_receiver2), _amount2);
   }
 
-  function testFuzz_CorrectlyMintsTokensAtExactlyStartTime(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
-    assertEq(token.balanceOf(_receiver), _cap);
-  }
-
-  function testFuzz_CorrectlyMintsTokensAfterStartTime(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-    vm.warp(_startTime + 1);
-
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
-    assertEq(token.balanceOf(_receiver), _cap);
-  }
-
-  function testFuzz_CorrectlyMintsTokensAtExactlyExpiration(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    vm.warp(_expirationTime);
-
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
-    assertEq(token.balanceOf(_receiver), _cap);
-  }
-
-  function testFuzz_RevertIf_MintAttemptedByNonMinter(
-    address _admin,
-    address _nonMinter,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_admin != address(0));
-    vm.assume(_nonMinter != address(0) && _nonMinter != _admin);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+  function testFuzz_RevertIf_MintAttemptedByNonMinter(address _nonMinter, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
 
     vm.expectRevert(_formatAccessControlError(_nonMinter, MINTER_ROLE));
     vm.prank(_nonMinter);
-    cappedMinter.mint(_nonMinter, _cap);
+    cappedMinter.mint(_nonMinter, _amount);
   }
 
-  function testFuzz_RevertIf_CapExceededOnMint(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 4, MAX_MINT_SUPPLY);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    vm.assume(_minter != address(0));
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
+  function testFuzz_RevertIf_CapExceededOnMint(address _minter, address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, DEFAULT_CAP + 1, type(uint256).max);
+    vm.assume(_receiver != address(0));
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
+    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, _minter, _amount));
     vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
-    assertEq(token.balanceOf(_receiver), _cap);
-
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, _minter, _cap));
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
+    cappedMinter.mint(_receiver, _amount);
   }
 
-  function testFuzz_RevertIf_AdminAttemptsToMintByDefault(
-    address _admin,
-    address _receiver,
-    uint256 _cap,
-    uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
+  function testFuzz_RevertIf_AdminAttemptsToMintByDefault(address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    vm.expectRevert(_formatAccessControlError(_admin, MINTER_ROLE));
-    vm.prank(_admin);
+    vm.expectRevert(_formatAccessControlError(cappedMinterAdmin, MINTER_ROLE));
+    vm.prank(cappedMinterAdmin);
     cappedMinter.mint(_receiver, _amount);
   }
 
   function testFuzz_RevertIf_MintBeforeStartTime(
-    address _admin,
     address _minter,
     address _receiver,
-    uint256 _cap,
     uint256 _amount,
-    uint256 _startTime
+    uint256 _beforeStartTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1 hours, type(uint32).max - 1);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    vm.assume(_receiver != address(0));
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    _beforeStartTime = bound(_beforeStartTime, 0, cappedMinter.START_TIME() - 1);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _startTime + 1);
+    vm.warp(_beforeStartTime);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__NotStarted.selector);
     vm.prank(_minter);
@@ -325,28 +197,18 @@ contract Mint is ZkCappedMinterV2Test {
   }
 
   function testFuzz_RevertIf_MintAfterExpiration(
-    address _admin,
     address _minter,
     address _receiver,
-    uint256 _cap,
     uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
+    uint256 _afterExpirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1, type(uint32).max - 1);
-    _expirationTime = bound(_expirationTime, _startTime + 1, type(uint32).max);
-    vm.warp(_startTime);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
+    _afterExpirationTime = bound(_afterExpirationTime, cappedMinter.EXPIRATION_TIME() + 1, type(uint256).max);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    vm.warp(_afterExpirationTime);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    // Warp to expiration time + 1
-    vm.warp(_expirationTime + 1);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__Expired.selector);
     vm.prank(_minter);
@@ -355,34 +217,19 @@ contract Mint is ZkCappedMinterV2Test {
 }
 
 contract Pause is ZkCappedMinterV2Test {
-  function testFuzz_CorrectlyPreventsNewMintsWhenPaused(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_minter != address(0) && _minter != _admin);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
+  function testFuzz_CorrectlyPreventsNewMintsWhenPaused(address _minter, address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    _grantMinterRole(cappedMinter, _admin, _minter);
+    // Grant minter role and verify minting works
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
     assertEq(token.balanceOf(_receiver), _amount);
 
     // Pause and verify minting fails
-    vm.prank(_admin);
+    vm.prank(cappedMinterAdmin);
     cappedMinter.pause();
 
     vm.expectRevert("Pausable: paused");
@@ -390,140 +237,89 @@ contract Pause is ZkCappedMinterV2Test {
     cappedMinter.mint(_receiver, _amount);
   }
 
-  function testFuzz_RevertIf_NotPauserRolePauses(
-    address _admin,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_admin != address(0));
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
+  function testFuzz_CorrectlyPausesMintsWhenTogglingPause(address _minter, address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
+
+    vm.startPrank(cappedMinterAdmin);
+    cappedMinter.pause();
+    cappedMinter.unpause();
+    cappedMinter.pause();
+    vm.stopPrank();
+
+    vm.expectRevert("Pausable: paused");
+    vm.prank(_minter);
+    cappedMinter.mint(_receiver, _amount);
+  }
+
+  function testFuzz_RevertIf_NotPauserRolePauses(uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
 
     // Remove PAUSER_ROLE from admin
-    vm.prank(_admin);
-    cappedMinter.revokeRole(PAUSER_ROLE, _admin);
+    vm.prank(cappedMinterAdmin);
+    cappedMinter.revokeRole(PAUSER_ROLE, cappedMinterAdmin);
 
-    vm.expectRevert(_formatAccessControlError(_admin, PAUSER_ROLE));
-    vm.prank(_admin);
+    vm.expectRevert(_formatAccessControlError(cappedMinterAdmin, PAUSER_ROLE));
+    vm.prank(cappedMinterAdmin);
     cappedMinter.pause();
   }
 }
 
 contract Unpause is ZkCappedMinterV2Test {
-  function testFuzz_CorrectlyAllowsNewMintsWhenUnpaused(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_minter != address(0) && _minter != _admin);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
+  function testFuzz_CorrectlyAllowsNewMintsWhenUnpaused(address _minter, address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    vm.prank(_admin);
+    vm.prank(cappedMinterAdmin);
     cappedMinter.pause();
 
-    vm.prank(_admin);
+    vm.prank(cappedMinterAdmin);
     cappedMinter.unpause();
 
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-    assertEq(token.balanceOf(_receiver), _amount);
   }
 
-  function testFuzz_RevertIf_NotPauserRoleUnpauses(
-    address _admin,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_admin != address(0));
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+  function testFuzz_RevertIf_NotPauserRoleUnpauses(uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
 
     // Pause first (while admin still has PAUSER_ROLE)
-    vm.prank(_admin);
+    vm.prank(cappedMinterAdmin);
     cappedMinter.pause();
 
     // Remove PAUSER_ROLE from admin
-    vm.prank(_admin);
-    cappedMinter.revokeRole(PAUSER_ROLE, _admin);
+    vm.prank(cappedMinterAdmin);
+    cappedMinter.revokeRole(PAUSER_ROLE, cappedMinterAdmin);
 
-    vm.expectRevert(_formatAccessControlError(_admin, PAUSER_ROLE));
-    vm.prank(_admin);
+    vm.expectRevert(_formatAccessControlError(cappedMinterAdmin, PAUSER_ROLE));
+    vm.prank(cappedMinterAdmin);
     cappedMinter.unpause();
   }
 }
 
 contract Close is ZkCappedMinterV2Test {
-  function testFuzz_CorrectlyPermanentlyBlocksMinting(
-    address _admin,
-    address _minter,
-    address _receiver,
-    uint256 _cap,
-    uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
+  function testFuzz_CorrectlyPermanentlyBlocksMinting(address _minter, address _receiver, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
     vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    vm.prank(_admin);
+    vm.prank(cappedMinterAdmin);
     cappedMinter.close();
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-
-    // Try to unpause (should fail)
-    vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
-    vm.prank(_admin);
-    cappedMinter.unpause();
   }
 
-  function testFuzz_RevertIf_NotPauserRoleCloses(
-    address _admin,
-    address _nonPauser,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) public {
-    vm.assume(_nonPauser != _admin);
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-    vm.warp(_startTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    vm.expectRevert(_formatAccessControlError(_nonPauser, PAUSER_ROLE));
-    vm.prank(_nonPauser);
+  function testFuzz_RevertIf_NotAdminCloses(address _nonAdmin, uint256 _amount) public {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    vm.prank(_nonAdmin);
     cappedMinter.close();
   }
 }

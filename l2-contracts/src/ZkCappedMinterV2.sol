@@ -40,7 +40,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @notice Error for when the cap is exceeded.
   error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
 
-  /// @notice Error for when the contract is closed.
+  /// @notice Thrown when a mint action is taken while the contract is closed.
   error ZkCappedMinterV2__ContractClosed();
 
   /// @notice Error for when minting is attempted before the start time.
@@ -89,7 +89,6 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
 
   /// @notice Unpauses token minting
   function unpause() external {
-    _revertIfClosed();
     _checkRole(PAUSER_ROLE, msg.sender);
     _unpause();
   }
@@ -130,11 +129,10 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
 
   /// @notice Permanently closes the contract, preventing any future minting.
   /// @dev Once closed, the contract cannot be reopened and all minting operations will be permanently blocked.
-  /// @dev Only callable by accounts with the PAUSER_ROLE.
+  /// @dev Only callable by the admin.
   function close() external {
-    _checkRole(PAUSER_ROLE, msg.sender);
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     closed = true;
-    _pause();
   }
 
   /// @notice Sets the metadata URI for this contract
