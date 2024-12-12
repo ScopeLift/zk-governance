@@ -25,6 +25,19 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
+      - name: Cache build
+        uses: actions/cache@v3
+        with:
+          path: |
+            l2-contracts/out
+            l2-contracts/cache
+            l2-contracts/zkout
+            l2-contracts/lib
+          key: ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-${{ hashFiles('l2-contracts/src/**/*.sol') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-
+            ${{ runner.os }}-build-
+
       - name: Install dependencies
         run: |
           forge install --no-commit
@@ -32,15 +45,6 @@ jobs:
 
       - name: Build contracts
         run: forge build --zksync
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-artifacts
-          path: |
-            l2-contracts/out
-            l2-contracts/cache
-            l2-contracts/zkout
 
   test:
     needs: build
@@ -57,14 +61,18 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Install dependencies
-        run: forge install --no-commit
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v3
+      - name: Cache build
+        uses: actions/cache@v3
         with:
-          name: build-artifacts
-          path: l2-contracts
+          path: |
+            l2-contracts/out
+            l2-contracts/cache
+            l2-contracts/zkout
+            l2-contracts/lib
+          key: ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-${{ hashFiles('l2-contracts/src/**/*.sol') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-
+            ${{ runner.os }}-build-
 
       - name: Run forge tests
         run: |
