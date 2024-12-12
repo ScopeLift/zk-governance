@@ -57,7 +57,7 @@ jobs:
       - name: Run Era test node
         uses: dutterbutter/era-test-node-action@v0.1.3
 
-      - name: Run tests
+      - name: Run hardhat tests
         run: npx hardhat test
 
   lint:
