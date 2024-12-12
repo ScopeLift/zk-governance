@@ -231,15 +231,6 @@ contract Close is ZkCappedMinterV2Test {
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-
-    // Try to unpause (should succeed but minting still blocked)
-    vm.prank(_cappedMinterAdmin);
-    cappedMinter.unpause();
-
-    // Verify minting is still blocked even after unpausing
-    vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _amount);
   }
 
   function testFuzz_RevertIf_NotAdminCloses(address _cappedMinterAdmin, address _nonAdmin, uint256 _cap) public {

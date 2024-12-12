@@ -88,6 +88,5 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   function close() external {
     _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     closed = true;
-    _pause();
   }
 }
