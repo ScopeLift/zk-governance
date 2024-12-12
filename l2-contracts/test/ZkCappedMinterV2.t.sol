@@ -86,12 +86,9 @@ contract Constructor is ZkCappedMinterV2Test {
     uint256 _startTime,
     uint256 _invalidExpirationTime
   ) public {
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1, type(uint256).max - 1);
-    vm.warp(_startTime);
-    _invalidExpirationTime = bound(_invalidExpirationTime, 0, _startTime - 1);
-
+    uint256 _invalidExpirationTime = bound(_invalidExpirationTime, 0, _startTime - 1);
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__InvalidTime.selector);
-    _createCappedMinter(_admin, _cap, _startTime, _invalidExpirationTime);
+    _createCappedMinter(_admin, _cap, _startTime, _startTime - 1);
   }
 
   function testFuzz_RevertIf_StartTimeInPast(address _admin, uint256 _cap, uint256 _pastTime, uint256 _expirationTime)
