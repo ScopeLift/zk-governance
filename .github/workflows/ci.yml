@@ -50,7 +50,6 @@ jobs:
 
       - name: Run forge tests
         run: |
-          # Run forge tests with lower fuzz runs for speed, only in our test directory
           forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol" --zksync -vv
 
   lint:
