@@ -28,7 +28,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @notice Error for when the cap is exceeded.
   error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
 
-  /// @notice Error for when the contract is closed.
+  /// @notice Thrown when a mint action is taken while the contract is closed.
   error ZkCappedMinterV2__ContractClosed();
 
   /// @notice Constructor for a new ZkCappedMinterV2 contract
