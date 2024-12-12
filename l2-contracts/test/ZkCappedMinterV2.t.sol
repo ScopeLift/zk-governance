@@ -178,22 +178,18 @@ contract Mint is ZkCappedMinterV2Test {
   }
 
   function testFuzz_RevertIf_MintBeforeStartTime(
-    address _admin,
     address _minter,
     address _receiver,
-    uint256 _cap,
     uint256 _amount,
-    uint256 _startTime
+    uint256 _beforeStartTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1 hours, type(uint32).max - 1);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    vm.assume(_receiver != address(0));
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    _beforeStartTime = bound(_beforeStartTime, 0, cappedMinter.START_TIME() - 1);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _startTime + 1);
+    vm.warp(_beforeStartTime);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__NotStarted.selector);
     vm.prank(_minter);
@@ -201,28 +197,18 @@ contract Mint is ZkCappedMinterV2Test {
   }
 
   function testFuzz_RevertIf_MintAfterExpiration(
-    address _admin,
     address _minter,
     address _receiver,
-    uint256 _cap,
     uint256 _amount,
-    uint256 _startTime,
-    uint256 _expirationTime
+    uint256 _afterExpirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1, type(uint32).max - 1);
-    _expirationTime = bound(_expirationTime, _startTime + 1, type(uint32).max);
-    vm.warp(_startTime);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
+    _afterExpirationTime = bound(_afterExpirationTime, cappedMinter.EXPIRATION_TIME() + 1, type(uint256).max);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    vm.warp(_afterExpirationTime);
 
-    _grantMinterRole(cappedMinter, _admin, _minter);
-
-    // Warp to expiration time + 1
-    vm.warp(_expirationTime + 1);
+    _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__Expired.selector);
     vm.prank(_minter);
