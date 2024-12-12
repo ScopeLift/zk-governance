@@ -85,9 +85,9 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
 
   /// @notice Permanently closes the contract, preventing any future minting.
   /// @dev Once closed, the contract cannot be reopened and all minting operations will be permanently blocked.
-  /// @dev Only callable by accounts with the PAUSER_ROLE.
+  /// @dev Only callable by the admin.
   function close() external {
-    _checkRole(PAUSER_ROLE, msg.sender);
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     closed = true;
     _pause();
   }

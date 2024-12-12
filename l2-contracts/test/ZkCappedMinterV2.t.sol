@@ -36,7 +36,7 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
         "AccessControl: account ",
         Strings.toHexString(uint160(account), 20),
         " is missing role ",
-        Strings.toHexString(uint256(role))
+        Strings.toHexString(uint256(role), 32)
       )
     );
   }
@@ -60,6 +60,7 @@ contract Mint is ZkCappedMinterV2Test {
     address _receiver,
     uint256 _amount
   ) public {
+    vm.assume(_receiver != address(0));
     _amount = bound(_amount, 1, DEFAULT_CAP);
 
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
@@ -220,7 +221,7 @@ contract Close is ZkCappedMinterV2Test {
     _amount = bound(_amount, 1, _cap);
     vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
 
-    ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
+    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_cappedMinterAdmin, _cap);
     vm.prank(_cappedMinterAdmin);
     cappedMinter.grantRole(MINTER_ROLE, _minter);
 
@@ -237,13 +238,13 @@ contract Close is ZkCappedMinterV2Test {
     cappedMinter.unpause();
   }
 
-  function testFuzz_RevertIf_NotPauserRoleCloses(address _cappedMinterAdmin, address _nonPauser, uint256 _cap) public {
-    vm.assume(_nonPauser != _cappedMinterAdmin);
+  function testFuzz_RevertIf_NotAdminCloses(address _cappedMinterAdmin, address _nonAdmin, uint256 _cap) public {
+    vm.assume(_nonAdmin != _cappedMinterAdmin);
     _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
 
-    ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
-    vm.expectRevert(_formatAccessControlError(_nonPauser, PAUSER_ROLE));
-    vm.prank(_nonPauser);
+    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_cappedMinterAdmin, _cap);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    vm.prank(_nonAdmin);
     cappedMinter.close();
   }
 }
