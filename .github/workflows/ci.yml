@@ -25,19 +25,6 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Cache build
-        uses: actions/cache@v3
-        with:
-          path: |
-            l2-contracts/out
-            l2-contracts/cache
-            l2-contracts/zkout
-            l2-contracts/lib
-          key: ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-${{ hashFiles('l2-contracts/src/**/*.sol') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-
-            ${{ runner.os }}-build-
-
       - name: Install dependencies
         run: |
           forge install --no-commit
@@ -47,7 +34,6 @@ jobs:
         run: forge build --zksync
 
   test:
-    needs: build
     defaults:
       run:
         working-directory: ./l2-contracts
@@ -61,23 +47,13 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Cache build
-        uses: actions/cache@v3
-        with:
-          path: |
-            l2-contracts/out
-            l2-contracts/cache
-            l2-contracts/zkout
-            l2-contracts/lib
-          key: ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-${{ hashFiles('l2-contracts/src/**/*.sol') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ hashFiles('l2-contracts/foundry.toml') }}-
-            ${{ runner.os }}-build-
+      - name: Install dependencies
+        run: forge install --no-commit
 
       - name: Run forge tests
         run: |
           # Run forge tests with lower fuzz runs for speed, only in our test directory
-          FOUNDRY_FUZZ_RUNS=10 forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol" --zksync
+          forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol" --zksync -vv
 
   lint:
     defaults:
