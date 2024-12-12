@@ -57,6 +57,9 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
+      - name: Install dependencies
+        run: forge install --no-commit
+
       - name: Download build artifacts
         uses: actions/download-artifact@v3
         with:
