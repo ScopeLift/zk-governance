@@ -70,7 +70,6 @@ contract Constructor is ZkCappedMinterV2Test {
     uint256 _startTime,
     uint256 _expirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
     vm.warp(_startTime);
 
@@ -87,7 +86,6 @@ contract Constructor is ZkCappedMinterV2Test {
     uint256 _startTime,
     uint256 _invalidExpirationTime
   ) public {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
     _startTime = bound(_startTime, vm.getBlockTimestamp() + 1, type(uint256).max - 1);
     vm.warp(_startTime);
     _invalidExpirationTime = bound(_invalidExpirationTime, 0, _startTime - 1);
