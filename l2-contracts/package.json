@@ -3,7 +3,7 @@
   "license": "MIT",
   "scripts": {
     "clean": "forge clean && npx hardhat clean",
-    "compile": "forge build && npx hardhat compile",
+    "compile": "forge build --zksync && npx hardhat compile",
     "local-node": "npx hardhat node-zksync",
     "script": "node script/RunScript.js",
     "foundry-test": "forge test --no-match-path .integration.t.sol --zksync",
