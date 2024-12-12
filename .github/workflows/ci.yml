@@ -25,11 +25,6 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Install dependencies
-        run: |
-          forge install --no-commit
-          npm install
-
       - name: Build contracts
         run: forge build --zksync
 
@@ -46,9 +41,6 @@ jobs:
 
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
-
-      - name: Install dependencies
-        run: forge install --no-commit
 
       - name: Run forge tests
         run: |
@@ -69,12 +61,6 @@ jobs:
 
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
-
-      - name: Install dependencies
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          forge install --no-commit --shallow
-          npm install
 
       - name: Install scopelint
         uses: engineerd/configurator@v0.0.8
