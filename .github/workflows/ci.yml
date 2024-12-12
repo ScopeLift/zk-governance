@@ -33,7 +33,17 @@ jobs:
       - name: Build contracts
         run: forge build --zksync
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: |
+            l2-contracts/out
+            l2-contracts/cache
+            l2-contracts/zkout
+
   test:
+    needs: build
     defaults:
       run:
         working-directory: ./l2-contracts
@@ -47,14 +57,16 @@ jobs:
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Install dependencies
-        run: |
-          forge install
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: l2-contracts
 
       - name: Run forge tests
         run: |
           # Run forge tests with lower fuzz runs for speed, only in our test directory
-          FOUNDRY_FUZZ_RUNS=10 forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol"
+          FOUNDRY_FUZZ_RUNS=10 forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol" --zksync
 
   lint:
     defaults:
