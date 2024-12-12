@@ -86,20 +86,24 @@ contract Constructor is ZkCappedMinterV2Test {
     uint256 _startTime,
     uint256 _invalidExpirationTime
   ) public {
+    _startTime = bound(_startTime, 1, type(uint256).max);
     uint256 _invalidExpirationTime = bound(_invalidExpirationTime, 0, _startTime - 1);
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__InvalidTime.selector);
-    _createCappedMinter(_admin, _cap, _startTime, _startTime - 1);
+    _createCappedMinter(_admin, _cap, _startTime, _invalidExpirationTime);
   }
 
-  function testFuzz_RevertIf_StartTimeInPast(address _admin, uint256 _cap, uint256 _pastTime, uint256 _expirationTime)
+  function testFuzz_RevertIf_StartTimeInPast(address _admin, uint256 _cap, uint256 _startTime, uint256 _expirationTime)
     public
   {
+    _startTime = bound(_startTime, 1, type(uint256).max);
+    vm.warp(_startTime);
+
     _cap = bound(_cap, 1, DEFAULT_CAP);
-    _pastTime = bound(_pastTime, 0, vm.getBlockTimestamp() - 1);
-    _expirationTime = bound(_expirationTime, vm.getBlockTimestamp() + 1, type(uint256).max);
+    uint256 _pastStartTime = _startTime - 1;
+    _expirationTime = bound(_expirationTime, _pastStartTime + 1, type(uint256).max);
 
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__InvalidTime.selector);
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _pastTime, _expirationTime);
+    _createCappedMinter(_admin, _cap, _pastStartTime, _expirationTime);
   }
 }
 
