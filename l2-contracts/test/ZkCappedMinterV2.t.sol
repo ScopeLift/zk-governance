@@ -535,7 +535,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
 
     ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-    assertEq(cappedMinter.metadataURI(), "");
+    assertEq(cappedMinter.metadataURI(), bytes32(0));
   }
 
   function testFuzz_AdminCanSetMetadataURI(
@@ -543,7 +543,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
     uint256 _cap,
     uint256 _startTime,
     uint256 _expirationTime,
-    string memory _uri
+    bytes32 _uri
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
 
@@ -560,7 +560,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
     uint256 _cap,
     uint256 _startTime,
     uint256 _expirationTime,
-    string memory _uri
+    bytes32 _uri
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
 
@@ -578,7 +578,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
     uint256 _cap,
     uint256 _startTime,
     uint256 _expirationTime,
-    string memory _uri
+    bytes32 _uri
   ) public {
     vm.assume(_admin != _nonAdmin);
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
