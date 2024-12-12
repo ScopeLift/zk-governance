@@ -334,52 +334,22 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
     assertEq(cappedMinter.metadataURI(), bytes32(0));
   }
 
-  function testFuzz_AdminCanSetMetadataURI(
-    address _admin,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
-    bytes32 _uri
-  ) public {
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    vm.prank(_admin);
+  function testFuzz_AdminCanSetMetadataURI(bytes32 _uri) public {
+    vm.prank(cappedMinterAdmin);
     cappedMinter.setMetadataURI(_uri);
 
     assertEq(cappedMinter.metadataURI(), _uri);
   }
 
-  function testFuzz_EmitsMetadataURISetEvent(
-    address _admin,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
-    bytes32 _uri
-  ) public {
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
-
-    vm.prank(_admin);
+  function testFuzz_EmitsMetadataURISetEvent(bytes32 _uri) public {
+    vm.prank(cappedMinterAdmin);
     vm.expectEmit();
     emit ZkCappedMinterV2.MetadataURISet(_uri);
     cappedMinter.setMetadataURI(_uri);
   }
 
-  function testFuzz_RevertIf_NonAdminSetsMetadataURI(
-    address _admin,
-    address _nonAdmin,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
-    bytes32 _uri
-  ) public {
-    vm.assume(_admin != _nonAdmin);
-    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
-
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+  function testFuzz_RevertIf_NonAdminSetsMetadataURI(address _nonAdmin, bytes32 _uri) public {
+    vm.assume(cappedMinterAdmin != _nonAdmin);
 
     vm.prank(_nonAdmin);
     vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
