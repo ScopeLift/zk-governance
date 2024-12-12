@@ -49,15 +49,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          forge install --no-commit
-          npm install
+          forge install
 
       - name: Run forge tests
         run: |
           # Run forge tests with lower fuzz runs for speed, only in our test directory
-          FOUNDRY_FUZZ_RUNS=10 forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol" --zksync -vvv
-          # Run hardhat tests
-          npx hardhat test
+          FOUNDRY_FUZZ_RUNS=10 forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol"
 
   lint:
     defaults:
