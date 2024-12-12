@@ -51,7 +51,6 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
 
   /// @notice Unpauses token minting
   function unpause() external {
-    _revertIfClosed();
     _checkRole(PAUSER_ROLE, msg.sender);
     _unpause();
   }
