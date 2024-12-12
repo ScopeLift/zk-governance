@@ -19,18 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: recursive
+          submodules: true
+          fetch-depth: 1
 
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Install the dependencies
+      - name: Install dependencies
         run: |
           forge install --no-commit
           npm install
 
       - name: Build contracts
-        run: npm run compile
+        run: forge build --zksync
 
   test:
     defaults:
@@ -40,17 +41,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: recursive
+          submodules: true
+          fetch-depth: 1
 
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Install the dependencies
+      - name: Install dependencies
         run: |
           forge install --no-commit
           npm install
 
-      - name: Run tests
+      - name: Run forge tests
         run: |
           # Run forge tests with lower fuzz runs for speed, only in our test directory
           FOUNDRY_FUZZ_RUNS=10 forge test --match-path "test/*.t.sol" --no-match-path "test/*.integration.t.sol" --zksync -vvv
@@ -66,14 +68,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: recursive
+          submodules: true
+          fetch-depth: 1
 
       - name: Install Foundry
         uses: dutterbutter/foundry-zksync-toolchain@v1
 
-      - name: Install the dependencies
+      - name: Install dependencies
         run: |
-          forge install --no-commit
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          forge install --no-commit --shallow
           npm install
 
       - name: Install scopelint
