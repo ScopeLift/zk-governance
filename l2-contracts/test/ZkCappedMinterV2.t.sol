@@ -239,7 +239,7 @@ contract Close is ZkCappedMinterV2Test {
   }
 
   function testFuzz_RevertIf_NotAdminCloses(address _nonAdmin, uint256 _amount) public {
-    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_nonAdmin != cappedMinterAdmin);
     vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
     vm.prank(_nonAdmin);
     cappedMinter.close();
