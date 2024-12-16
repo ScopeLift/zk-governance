@@ -33,16 +33,15 @@ contract ZkCappedMinterV2FactoryTest is ZkTokenTest {
     return bound(_cap, 1, MAX_MINT_SUPPLY);
   }
 
-  function _boundToValidTimeControls(uint256 _startTime, uint256 _expirationTime)
-    internal
-    view
-    returns (uint256, uint256)
-  {
-    // Using uint32 for time controls to prevent overflows in the ZkToken contract regarding block numbers needing to be
-    // casted to uint32.
-    _startTime = bound(_startTime, vm.getBlockTimestamp() + 1, type(uint32).max - 1);
-    _expirationTime = bound(_expirationTime, _startTime + 1, type(uint32).max);
-    return (_startTime, _expirationTime);
+  function _boundToValidTimeControls(uint48 _startTime, uint48 _expirationTime) internal view returns (uint48, uint48) {
+    {
+      // Using uint32 for time controls to prevent overflows in the ZkToken contract regarding block numbers needing to
+      // be
+      // casted to uint32.
+      _startTime = uint48(bound(_startTime, vm.getBlockTimestamp() + 1, type(uint32).max - 1));
+      _expirationTime = uint48(bound(_expirationTime, _startTime + 1, type(uint32).max));
+      return (_startTime, _expirationTime);
+    }
   }
 }
 
@@ -50,8 +49,8 @@ contract CreateCappedMinter is ZkCappedMinterV2FactoryTest {
   function testFuzz_CreatesNewCappedMinter(
     address _cappedMinterAdmin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
@@ -72,8 +71,8 @@ contract CreateCappedMinter is ZkCappedMinterV2FactoryTest {
   function testFuzz_EmitsCappedMinterCreatedEvent(
     address _cappedMinterAdmin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
@@ -101,8 +100,8 @@ contract CreateCappedMinter is ZkCappedMinterV2FactoryTest {
   function testFuzz_RevertIf_CreatingDuplicateMinter(
     address _cappedMinterAdmin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
@@ -125,8 +124,8 @@ contract GetMinter is ZkCappedMinterV2FactoryTest {
   function testFuzz_ReturnsCorrectMinterAddress(
     address _cappedMinterAdmin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
@@ -148,8 +147,8 @@ contract GetMinter is ZkCappedMinterV2FactoryTest {
   function testFuzz_GetMinterWithoutDeployment(
     address _cappedMinterAdmin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) public {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);

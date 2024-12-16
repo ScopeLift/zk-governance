@@ -26,10 +26,10 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   bool public closed;
 
   /// @notice The timestamp when minting can begin.
-  uint256 public immutable START_TIME;
+  uint48 public immutable START_TIME;
 
   /// @notice The timestamp after which minting is no longer allowed (inclusive).
-  uint256 public immutable EXPIRATION_TIME;
+  uint48 public immutable EXPIRATION_TIME;
 
   /// @notice Error for when the cap is exceeded.
   error ZkCappedMinterV2__CapExceeded(address minter, uint256 amount);
@@ -52,13 +52,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @param _cap The maximum number of tokens that may be minted by the ZkCappedMinter.
   /// @param _startTime The timestamp when minting can begin.
   /// @param _expirationTime The timestamp after which minting is no longer allowed (inclusive).
-  constructor(
-    IMintableAndDelegatable _token,
-    address _admin,
-    uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime
-  ) {
+  constructor(IMintableAndDelegatable _token, address _admin, uint256 _cap, uint48 _startTime, uint48 _expirationTime) {
     if (_startTime > _expirationTime) {
       revert ZkCappedMinterV2__InvalidTime();
     }
