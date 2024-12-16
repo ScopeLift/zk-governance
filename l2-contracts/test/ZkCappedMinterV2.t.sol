@@ -23,8 +23,12 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
 
     cappedMinter = _createCappedMinter(cappedMinterAdmin, DEFAULT_CAP, DEFAULT_START_TIME, DEFAULT_EXPIRATION_TIME);
 
+    _grantMinterRoleToCappedMinter(address(cappedMinter));
+  }
+
+  function _grantMinterRoleToCappedMinter(address _cappedMinter) internal {
     vm.prank(admin);
-    token.grantRole(MINTER_ROLE, address(cappedMinter));
+    token.grantRole(MINTER_ROLE, address(_cappedMinter));
   }
 
   function _createCappedMinter(address _admin, uint256 _cap, uint48 _startTime, uint48 _expirationTime)
@@ -146,6 +150,44 @@ contract Mint is ZkCappedMinterV2Test {
     assertEq(token.balanceOf(_receiver2), _amount2);
   }
 
+  function testFuzz_AllowsNestedMinting(
+    address _parentAdmin,
+    address _childAdmin,
+    address _minter,
+    address _receiver,
+    uint256 _parentCap,
+    uint256 _childCap,
+    uint256 _amount,
+    uint48 _startTime,
+    uint48 _expirationTime
+  ) public {
+    // Ensure caps and amounts make sense
+    _parentCap = bound(_parentCap, 1, MAX_MINT_SUPPLY);
+    _childCap = bound(_childCap, 1, _parentCap);
+    _amount = bound(_amount, 1, _childCap);
+
+    vm.assume(_receiver != address(0));
+
+    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
+    vm.warp(_startTime);
+
+    ZkCappedMinterV2 parentMinter = _createCappedMinter(_parentAdmin, _parentCap, _startTime, _expirationTime);
+    ZkCappedMinterV2 childMinter = _createCappedMinter(_childAdmin, _childCap, _startTime, _expirationTime);
+
+    _grantMinterRoleToCappedMinter(address(parentMinter));
+    _grantMinterRoleToCappedMinter(address(childMinter));
+
+    // Parent minter grants MINTER_ROLE to child minter
+    _grantMinterRole(parentMinter, _parentAdmin, address(childMinter));
+
+    // Child should be able to mint from parent
+    vm.prank(address(childMinter));
+    parentMinter.mint(_receiver, _amount);
+
+    assertEq(token.balanceOf(_receiver), _amount);
+    assertEq(parentMinter.minted(), _amount);
+  }
+
   function testFuzz_RevertIf_MintAttemptedByNonMinter(address _nonMinter, uint256 _amount) public {
     _amount = bound(_amount, 1, DEFAULT_CAP);
 
@@ -225,6 +267,47 @@ contract Mint is ZkCappedMinterV2Test {
     vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
+  }
+
+  function testFuzz_RevertIf_ChildExceedsParentMintEvenThoughChildCapIsHigher(
+    address _parentAdmin,
+    address _childAdmin,
+    address _minter,
+    address _receiver,
+    uint256 _parentCap,
+    uint256 _childCap,
+    uint256 _amount,
+    uint48 _startTime,
+    uint48 _expirationTime
+  ) public {
+    // Parent has lower cap than child
+    _parentCap = bound(_parentCap, 2, MAX_MINT_SUPPLY - 1);
+    _childCap = bound(_childCap, _parentCap + 1, MAX_MINT_SUPPLY);
+    // Amount exceeds parent cap but is within child cap
+    _amount = bound(_amount, _parentCap + 1, _childCap);
+
+    vm.assume(_parentAdmin != address(0));
+    vm.assume(_childAdmin != address(0));
+    vm.assume(_minter != address(0));
+    vm.assume(_receiver != address(0));
+    vm.assume(_receiver != initMintReceiver);
+
+    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
+    vm.warp(_startTime);
+
+    ZkCappedMinterV2 parentMinter = _createCappedMinter(_parentAdmin, _parentCap, _startTime, _expirationTime);
+    ZkCappedMinterV2 childMinter = _createCappedMinter(_childAdmin, _childCap, _startTime, _expirationTime);
+
+    // Parent minter grants MINTER_ROLE to child minter
+    _grantMinterRole(parentMinter, _parentAdmin, address(childMinter));
+
+    // Child tries to mint more than parent's cap
+    vm.startPrank(address(childMinter));
+    vm.expectRevert(
+      abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, address(childMinter), _amount)
+    );
+    parentMinter.mint(_receiver, _amount);
+    vm.stopPrank();
   }
 }
 
