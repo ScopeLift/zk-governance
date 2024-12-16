@@ -9,7 +9,7 @@ import {console2} from "forge-std/Test.sol";
 
 contract ZkCappedMinterV2Test is ZkTokenTest {
   ZkCappedMinterV2 public cappedMinter;
-  uint256 constant DEFAULT_CAP = 1000e18;
+  uint256 constant DEFAULT_CAP = 100_000_000e18;
   uint48 DEFAULT_START_TIME;
   uint48 DEFAULT_EXPIRATION_TIME;
 
@@ -105,6 +105,7 @@ contract Constructor is ZkCappedMinterV2Test {
 
 contract Mint is ZkCappedMinterV2Test {
   function testFuzz_MintsNewTokensWhenTheAmountRequestedIsBelowTheCap(
+    address _cappedMinterAdmin,
     address _minter,
     address _receiver,
     uint256 _amount
@@ -213,7 +214,7 @@ contract Mint is ZkCappedMinterV2Test {
 
   function testFuzz_CorrectlyPermanentlyBlocksMinting(address _minter, address _receiver, uint256 _amount) public {
     _amount = bound(_amount, 1, DEFAULT_CAP);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
+    vm.assume(_receiver != address(0));
 
     vm.prank(cappedMinterAdmin);
     cappedMinter.grantRole(MINTER_ROLE, _minter);
