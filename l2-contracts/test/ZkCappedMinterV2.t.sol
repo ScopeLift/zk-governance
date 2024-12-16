@@ -66,9 +66,11 @@ contract Mint is ZkCappedMinterV2Test {
 
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
+    uint256 amountBefore = token.balanceOf(_receiver);
+
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-    assertEq(token.balanceOf(_receiver), _amount);
+    assertEq(token.balanceOf(_receiver), amountBefore + _amount);
   }
 
   function testFuzz_MintsNewTokensInSuccessionToDifferentAccountsWhileRemainingBelowCap(
@@ -86,13 +88,16 @@ contract Mint is ZkCappedMinterV2Test {
 
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
+    uint256 amountBefore1 = token.balanceOf(_receiver1);
+    uint256 amountBefore2 = token.balanceOf(_receiver2);
+
     vm.startPrank(_minter);
     cappedMinter.mint(_receiver1, _amount1);
     cappedMinter.mint(_receiver2, _amount2);
     vm.stopPrank();
 
-    assertEq(token.balanceOf(_receiver1), _amount1);
-    assertEq(token.balanceOf(_receiver2), _amount2);
+    assertEq(token.balanceOf(_receiver1), amountBefore1 + _amount1);
+    assertEq(token.balanceOf(_receiver2), amountBefore2 + _amount2);
   }
 
   function testFuzz_RevertIf_MintAttemptedByNonMinter(address _nonMinter, uint256 _amount) public {
