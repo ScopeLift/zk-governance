@@ -9,7 +9,7 @@ import {console2} from "forge-std/Test.sol";
 
 contract ZkCappedMinterV2Test is ZkTokenTest {
   ZkCappedMinterV2 public cappedMinter;
-  uint256 constant DEFAULT_CAP = 1000e18;
+  uint256 constant DEFAULT_CAP = 100_000_000e18;
   address cappedMinterAdmin = makeAddr("cappedMinterAdmin");
 
   function setUp() public virtual override {
