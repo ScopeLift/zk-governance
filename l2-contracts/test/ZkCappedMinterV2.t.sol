@@ -40,11 +40,6 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
       )
     );
   }
-
-  function _grantMinterRole(ZkCappedMinterV2 _cappedMinter, address _cappedMinterAdmin, address _minter) internal {
-    vm.prank(_cappedMinterAdmin);
-    _cappedMinter.grantRole(MINTER_ROLE, _minter);
-  }
 }
 
 contract Constructor is ZkCappedMinterV2Test {
@@ -66,7 +61,6 @@ contract Mint is ZkCappedMinterV2Test {
     address _receiver,
     uint256 _amount
   ) public {
-
     vm.assume(_receiver != address(0));
     _amount = bound(_amount, 1, DEFAULT_CAP);
 
@@ -213,75 +207,5 @@ contract Unpause is ZkCappedMinterV2Test {
     vm.expectRevert(_formatAccessControlError(cappedMinterAdmin, PAUSER_ROLE));
     vm.prank(cappedMinterAdmin);
     cappedMinter.unpause();
-    
-  function testFuzz_RevertIf_MintAttemptedByNonMinter(address _cappedMinterAdmin, address _nonMinter, uint256 _cap)
-    public
-  {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
-
-    vm.assume(_nonMinter != address(0));
-    vm.assume(!cappedMinter.hasRole(MINTER_ROLE, _nonMinter));
-
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "AccessControl: account ",
-          Strings.toHexString(uint160(_nonMinter), 20),
-          " is missing role ",
-          Strings.toHexString(uint256(MINTER_ROLE))
-        )
-      )
-    );
-    vm.prank(_nonMinter);
-    cappedMinter.mint(_nonMinter, _cap);
-  }
-
-  function testFuzz_RevertIf_CapExceededOnMint(
-    address _cappedMinterAdmin,
-    address _minter,
-    address _receiver,
-    uint256 _cap
-  ) public {
-    _cap = bound(_cap, 4, MAX_MINT_SUPPLY);
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-    vm.assume(_minter != address(0));
-
-    ZkCappedMinterV2 cappedMinter = createCappedMinter(_cappedMinterAdmin, _cap);
-
-    _grantMinterRole(cappedMinter, _cappedMinterAdmin, _minter);
-
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
-    assertEq(token.balanceOf(_receiver), _cap);
-
-    vm.expectRevert(abi.encodeWithSelector(ZkCappedMinterV2.ZkCappedMinterV2__CapExceeded.selector, _minter, _cap));
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _cap);
-  }
-
-  function testFuzz_RevertIf_AdminMintsByDefault(address _admin, address _receiver, uint256 _cap, uint256 _amount)
-    public
-  {
-    _cap = bound(_cap, 0, MAX_MINT_SUPPLY);
-    vm.assume(_cap > 0);
-    _amount = bound(_amount, 1, _cap);
-    vm.assume(_admin != address(0));
-    vm.assume(_receiver != address(0) && _receiver != initMintReceiver);
-
-    ZkCappedMinterV2 cappedMinter = createCappedMinter(_admin, _cap);
-
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "AccessControl: account ",
-          Strings.toHexString(uint160(_admin), 20),
-          " is missing role ",
-          Strings.toHexString(uint256(MINTER_ROLE))
-        )
-      )
-    );
-    vm.prank(_admin);
-    cappedMinter.mint(_receiver, _amount);
   }
 }
