@@ -60,6 +60,7 @@ contract Mint is ZkCappedMinterV2Test {
     address _receiver,
     uint256 _amount
   ) public {
+    vm.assume(_receiver != address(0));
     _amount = bound(_amount, 1, DEFAULT_CAP);
 
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
