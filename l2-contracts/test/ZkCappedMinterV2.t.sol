@@ -19,7 +19,7 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
     super.setUp();
 
     DEFAULT_START_TIME = uint48(vm.getBlockTimestamp());
-    DEFAULT_EXPIRATION_TIME = uint48(DEFAULT_START_TIME + 100_000_000);
+    DEFAULT_EXPIRATION_TIME = uint48(DEFAULT_START_TIME + 3 days);
 
     cappedMinter = _createCappedMinter(cappedMinterAdmin, DEFAULT_CAP, DEFAULT_START_TIME, DEFAULT_EXPIRATION_TIME);
 
