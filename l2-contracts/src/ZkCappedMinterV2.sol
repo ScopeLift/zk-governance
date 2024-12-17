@@ -47,7 +47,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   error ZkCappedMinterV2__InvalidTime();
 
   /// @notice Constructor for a new ZkCappedMinterV2 contract
-  /// @param _mintable The token or contract where tokens will be minted.
+  /// @param _mintable The contract where tokens will be minted.
   /// @param _admin The address that will be granted the admin role.
   /// @param _cap The maximum number of tokens that may be minted by the ZkCappedMinter.
   /// @param _startTime The timestamp when minting can begin.

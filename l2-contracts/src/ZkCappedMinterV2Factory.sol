@@ -19,7 +19,7 @@ contract ZkCappedMinterV2Factory {
 
   /// @notice Emitted when a new ZkCappedMinterV2 is created.
   /// @param minterAddress The address of the newly deployed ZkCappedMinterV2.
-  /// @param mintable The token or contract where tokens will be minted.
+  /// @param mintable The contract where tokens will be minted.
   /// @param admin The address authorized to mint tokens.
   /// @param cap The maximum number of tokens that may be minted.
   /// @param startTime The timestamp when minting can begin.
@@ -34,7 +34,7 @@ contract ZkCappedMinterV2Factory {
   );
 
   /// @notice Deploys a new ZkCappedMinterV2 contract using CREATE2.
-  /// @param _mintable The token or contract where tokens will be minted.
+  /// @param _mintable The contract where tokens will be minted.
   /// @param _admin The address authorized to mint tokens.
   /// @param _cap The maximum number of tokens that may be minted.
   /// @param _startTime The timestamp when minting can begin.
@@ -58,7 +58,7 @@ contract ZkCappedMinterV2Factory {
   }
 
   /// @notice Computes the address of a ZkCappedMinterV2 deployed via this factory.
-  /// @param _mintable The token or contract where tokens will be minted.
+  /// @param _mintable The contract where tokens will be minted.
   /// @param _admin The address authorized to mint tokens.
   /// @param _cap The maximum number of tokens that may be minted.
   /// @param _startTime The timestamp when minting can begin.
