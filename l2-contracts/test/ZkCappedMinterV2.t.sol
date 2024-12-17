@@ -497,7 +497,7 @@ contract Close is ZkCappedMinterV2Test {
   function testFuzz_EmitsClosedEvent() public {
     vm.prank(cappedMinterAdmin);
     vm.expectEmit();
-    emit ZkCappedMinterV2.Closed();
+    emit ZkCappedMinterV2.Closed(cappedMinterAdmin);
     cappedMinter.close();
   }
 
