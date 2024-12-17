@@ -37,6 +37,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
   /// @notice Emitted when the metadata URI is set.
   event MetadataURISet(bytes32 uri);
 
+  /// @notice Emitted when tokens are minted.
   event Minted(address indexed minter, address indexed to, uint256 amount);
 
   /// @notice Error for when the cap is exceeded.
