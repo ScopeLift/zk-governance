@@ -152,9 +152,11 @@ contract Pause is ZkCappedMinterV2Test {
     // Grant minter role and verify minting works
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
+    uint256 amountBefore = token.balanceOf(_receiver);
+
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-    assertEq(token.balanceOf(_receiver), _amount);
+    assertEq(token.balanceOf(_receiver), amountBefore + _amount);
 
     // Pause and verify minting fails
     vm.prank(cappedMinterAdmin);
