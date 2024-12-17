@@ -134,9 +134,7 @@ contract Mint is ZkCappedMinterV2Test {
     address _receiver1,
     address _receiver2,
     uint256 _amount1,
-    uint256 _amount2,
-    uint256 _startTime,
-    uint256 _expirationTime
+    uint256 _amount2
   ) public {
     _amount1 = bound(_amount1, 1, DEFAULT_CAP / 2);
     _amount2 = bound(_amount2, 1, DEFAULT_CAP / 2);
