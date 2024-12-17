@@ -96,7 +96,9 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
     _requireNotPaused();
     _checkRole(MINTER_ROLE, msg.sender);
     _revertIfCapExceeded(_amount);
+
     minted += _amount;
+
     TOKEN.mint(_to, _amount);
   }
 
