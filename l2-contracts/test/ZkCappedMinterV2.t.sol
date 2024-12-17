@@ -206,7 +206,6 @@ contract Mint is ZkCappedMinterV2Test {
       _createCappedMinter(address(parentMinter), _childAdmin, _childCap, _startTime, _expirationTime);
 
     _grantMinterRoleToCappedMinter(address(parentMinter));
-    _grantMinterRoleToCappedMinter(address(childMinter));
 
     // Parent minter grants MINTER_ROLE to child minter
     _grantMinterRole(parentMinter, _parentAdmin, address(childMinter));
