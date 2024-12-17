@@ -237,6 +237,44 @@ contract Mint is ZkCappedMinterV2Test {
     assertEq(balanceAfter, balanceBefore + _amount1 + _amount2);
   }
 
+  function testFuzz_ParentMintDoesNotCountAgainstChildCap(
+    address _parentAdmin,
+    address _childAdmin,
+    address _minter,
+    address _receiver,
+    uint256 _parentCap,
+    uint256 _childCap,
+    uint256 _amount,
+    uint48 _startTime,
+    uint48 _expirationTime
+  ) public {
+    vm.assume(_receiver != address(0));
+
+    _amount = bound(_amount, 1, _parentCap);
+
+    (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
+    vm.warp(_startTime);
+
+    ZkCappedMinterV2 parentMinter =
+      _createCappedMinter(address(token), _parentAdmin, _parentCap, _startTime, _expirationTime);
+    // Create child minter with parent minter as token
+    ZkCappedMinterV2 childMinter =
+      _createCappedMinter(address(parentMinter), _childAdmin, _childCap, _startTime, _expirationTime);
+
+    _grantMinterRoleToCappedMinter(address(parentMinter));
+
+    // Parent minter grants MINTER_ROLE to minter
+    _grantMinterRole(parentMinter, _parentAdmin, _minter);
+
+    // Minter mints through parent contract
+    vm.prank(_minter);
+    parentMinter.mint(_receiver, _amount);
+
+    // Verify child contract is not affected
+    assertEq(childMinter.minted(), 0);
+    assertEq(parentMinter.minted(), _amount);
+  }
+
   function testFuzz_RevertIf_MintAttemptedByNonMinter(address _nonMinter, uint256 _amount) public {
     _amount = bound(_amount, 1, DEFAULT_CAP);
 
