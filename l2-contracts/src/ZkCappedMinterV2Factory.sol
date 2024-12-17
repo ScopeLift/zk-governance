@@ -29,8 +29,8 @@ contract ZkCappedMinterV2Factory {
     IMintableAndDelegatable token,
     address admin,
     uint256 cap,
-    uint256 startTime,
-    uint256 expirationTime
+    uint48 startTime,
+    uint48 expirationTime
   );
 
   /// @notice Deploys a new ZkCappedMinterV2 contract using CREATE2.
@@ -45,8 +45,8 @@ contract ZkCappedMinterV2Factory {
     IMintableAndDelegatable _token,
     address _admin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) external returns (address minterAddress) {
     bytes memory saltArgs = abi.encode(_token, _admin, _cap, _startTime, _expirationTime);
@@ -69,8 +69,8 @@ contract ZkCappedMinterV2Factory {
     IMintableAndDelegatable _token,
     address _admin,
     uint256 _cap,
-    uint256 _startTime,
-    uint256 _expirationTime,
+    uint48 _startTime,
+    uint48 _expirationTime,
     uint256 _saltNonce
   ) external view returns (address addr) {
     bytes memory saltArgs = abi.encode(_token, _admin, _cap, _startTime, _expirationTime);
