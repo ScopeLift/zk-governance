@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import {ZkTokenTest} from "test/utils/ZkTokenTest.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {IMintableAndDelegatable} from "src/interfaces/IMintableAndDelegatable.sol";
+import {IMintable} from "src/interfaces/IMintable.sol";
 import {ZkCappedMinterV2} from "src/ZkCappedMinterV2.sol";
 import {console2} from "forge-std/Test.sol";
 
@@ -32,11 +32,14 @@ contract ZkCappedMinterV2Test is ZkTokenTest {
     token.grantRole(MINTER_ROLE, address(_cappedMinter));
   }
 
-  function _createCappedMinter(address _token, address _admin, uint256 _cap, uint48 _startTime, uint48 _expirationTime)
-    internal
-    returns (ZkCappedMinterV2)
-  {
-    return new ZkCappedMinterV2(IMintableAndDelegatable(_token), _admin, _cap, _startTime, _expirationTime);
+  function _createCappedMinter(
+    address _mintable,
+    address _admin,
+    uint256 _cap,
+    uint48 _startTime,
+    uint48 _expirationTime
+  ) internal returns (ZkCappedMinterV2) {
+    return new ZkCappedMinterV2(IMintable(_mintable), _admin, _cap, _startTime, _expirationTime);
   }
 
   function _boundToValidTimeControls(uint48 _startTime, uint48 _expirationTime) internal view returns (uint48, uint48) {
@@ -75,7 +78,7 @@ contract Constructor is ZkCappedMinterV2Test {
     vm.warp(_startTime);
 
     ZkCappedMinterV2 cappedMinter = _createCappedMinter(address(token), _admin, _cap, _startTime, _expirationTime);
-    assertEq(address(cappedMinter.TOKEN()), address(token));
+    assertEq(address(cappedMinter.MINTABLE()), address(token));
     assertEq(cappedMinter.CAP(), _cap);
     assertEq(cappedMinter.START_TIME(), _startTime);
     assertEq(cappedMinter.EXPIRATION_TIME(), _expirationTime);
