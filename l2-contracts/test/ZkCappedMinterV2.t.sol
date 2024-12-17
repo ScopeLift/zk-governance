@@ -250,6 +250,7 @@ contract Mint is ZkCappedMinterV2Test {
   ) public {
     vm.assume(_receiver != address(0));
 
+    _parentCap = bound(_parentCap, 1, DEFAULT_CAP);
     _amount = bound(_amount, 1, _parentCap);
 
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
