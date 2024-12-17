@@ -150,7 +150,9 @@ contract Mint is ZkCappedMinterV2Test {
     assertEq(token.balanceOf(_receiver2), balanceBefore2 + _amount2);
   }
 
-  function testFuzz_CorrectlyPermanentlyBlocksMinting(address _minter, address _receiver, uint256 _amount) public {
+  function testFuzz_CorrectlyPermanentlyBlocksMintingWhenClosed(address _minter, address _receiver, uint256 _amount)
+    public
+  {
     _amount = bound(_amount, 1, DEFAULT_CAP);
     vm.assume(_receiver != address(0));
 
