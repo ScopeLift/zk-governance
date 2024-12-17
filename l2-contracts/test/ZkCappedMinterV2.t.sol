@@ -126,9 +126,7 @@ contract Mint is ZkCappedMinterV2Test {
     address _receiver1,
     address _receiver2,
     uint256 _amount1,
-    uint256 _amount2,
-    uint256 _startTime,
-    uint256 _expirationTime
+    uint256 _amount2
   ) public {
     _amount1 = bound(_amount1, 1, DEFAULT_CAP / 2);
     _amount2 = bound(_amount2, 1, DEFAULT_CAP / 2);
@@ -339,7 +337,7 @@ contract Close is ZkCappedMinterV2Test {
 }
 
 contract SetMetadataURI is ZkCappedMinterV2Test {
-  function testFuzz_InitialMetadataURIIsEmpty(address _admin, uint256 _cap, uint256 _startTime, uint256 _expirationTime)
+  function testFuzz_InitialMetadataURIIsEmpty(address _admin, uint256 _cap, uint48 _startTime, uint48 _expirationTime)
     public
   {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
