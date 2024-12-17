@@ -113,7 +113,6 @@ contract Constructor is ZkCappedMinterV2Test {
 
 contract Mint is ZkCappedMinterV2Test {
   function testFuzz_MintsNewTokensWhenTheAmountRequestedIsBelowTheCap(
-    address _cappedMinterAdmin,
     address _minter,
     address _receiver,
     uint256 _amount
@@ -123,9 +122,11 @@ contract Mint is ZkCappedMinterV2Test {
 
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
+    uint256 balanceBefore = token.balanceOf(_receiver);
+
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-    assertEq(token.balanceOf(_receiver), _amount);
+    assertEq(token.balanceOf(_receiver), balanceBefore + _amount);
   }
 
   function testFuzz_MintsNewTokensInSuccessionToDifferentAccountsWhileRemainingBelowCap(
@@ -145,13 +146,33 @@ contract Mint is ZkCappedMinterV2Test {
 
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
+    uint256 balanceBefore1 = token.balanceOf(_receiver1);
+    uint256 balanceBefore2 = token.balanceOf(_receiver2);
+
     vm.startPrank(_minter);
     cappedMinter.mint(_receiver1, _amount1);
     cappedMinter.mint(_receiver2, _amount2);
     vm.stopPrank();
 
-    assertEq(token.balanceOf(_receiver1), _amount1);
-    assertEq(token.balanceOf(_receiver2), _amount2);
+    assertEq(token.balanceOf(_receiver1), balanceBefore1 + _amount1);
+    assertEq(token.balanceOf(_receiver2), balanceBefore2 + _amount2);
+  }
+
+  function testFuzz_CorrectlyPermanentlyBlocksMintingWhenClosed(address _minter, address _receiver, uint256 _amount)
+    public
+  {
+    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_receiver != address(0));
+
+    vm.prank(cappedMinterAdmin);
+    cappedMinter.grantRole(MINTER_ROLE, _minter);
+
+    vm.prank(cappedMinterAdmin);
+    cappedMinter.close();
+
+    vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
+    vm.prank(_minter);
+    cappedMinter.mint(_receiver, _amount);
   }
 
   function testFuzz_NestedMintingContributesToParentCap(
@@ -285,21 +306,6 @@ contract Mint is ZkCappedMinterV2Test {
     cappedMinter.mint(_receiver, _amount);
   }
 
-  function testFuzz_CorrectlyPermanentlyBlocksMinting(address _minter, address _receiver, uint256 _amount) public {
-    _amount = bound(_amount, 1, DEFAULT_CAP);
-    vm.assume(_receiver != address(0));
-
-    vm.prank(cappedMinterAdmin);
-    cappedMinter.grantRole(MINTER_ROLE, _minter);
-
-    vm.prank(cappedMinterAdmin);
-    cappedMinter.close();
-
-    vm.expectRevert(ZkCappedMinterV2.ZkCappedMinterV2__ContractClosed.selector);
-    vm.prank(_minter);
-    cappedMinter.mint(_receiver, _amount);
-  }
-
   function testFuzz_RevertIf_ChildExceedsParentMintEvenThoughChildCapIsHigher(
     address _parentAdmin,
     address _childAdmin,
@@ -352,9 +358,11 @@ contract Pause is ZkCappedMinterV2Test {
     // Grant minter role and verify minting works
     _grantMinterRole(cappedMinter, cappedMinterAdmin, _minter);
 
+    uint256 balanceBefore = token.balanceOf(_receiver);
+
     vm.prank(_minter);
     cappedMinter.mint(_receiver, _amount);
-    assertEq(token.balanceOf(_receiver), _amount);
+    assertEq(token.balanceOf(_receiver), balanceBefore + _amount);
 
     // Pause and verify minting fails
     vm.prank(cappedMinterAdmin);
@@ -438,8 +446,8 @@ contract Close is ZkCappedMinterV2Test {
     assertEq(cappedMinter.closed(), true);
   }
 
-  function testFuzz_RevertIf_NotAdminCloses(address _nonAdmin, uint256 _amount) public {
-    _amount = bound(_amount, 1, DEFAULT_CAP);
+  function testFuzz_RevertIf_NotAdminCloses(address _nonAdmin) public {
+    vm.assume(_nonAdmin != cappedMinterAdmin);
     vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
     vm.prank(_nonAdmin);
     cappedMinter.close();
