@@ -56,7 +56,6 @@ contract Constructor is ZkCappedMinterV2Test {
 
 contract Mint is ZkCappedMinterV2Test {
   function testFuzz_MintsNewTokensWhenTheAmountRequestedIsBelowTheCap(
-    address _cappedMinterAdmin,
     address _minter,
     address _receiver,
     uint256 _amount
@@ -240,7 +239,7 @@ contract Close is ZkCappedMinterV2Test {
     assertEq(cappedMinter.closed(), true);
   }
 
-  function testFuzz_RevertIf_NotAdminCloses(address _nonAdmin, uint256 _amount) public {
+  function testFuzz_RevertIf_NotAdminCloses(address _nonAdmin) public {
     vm.assume(_nonAdmin != cappedMinterAdmin);
     vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
     vm.prank(_nonAdmin);
