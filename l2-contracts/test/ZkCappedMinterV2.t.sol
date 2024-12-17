@@ -496,7 +496,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
   {
     (_startTime, _expirationTime) = _boundToValidTimeControls(_startTime, _expirationTime);
 
-    ZkCappedMinterV2 cappedMinter = _createCappedMinter(_admin, _cap, _startTime, _expirationTime);
+    ZkCappedMinterV2 cappedMinter = _createCappedMinter(address(token), _admin, _cap, _startTime, _expirationTime);
     assertEq(cappedMinter.metadataURI(), bytes32(0));
   }
 
