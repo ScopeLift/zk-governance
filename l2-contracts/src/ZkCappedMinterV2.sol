@@ -106,7 +106,7 @@ contract ZkCappedMinterV2 is AccessControl, Pausable {
     TOKEN.mint(_to, _amount);
   }
   /// @inheritdoc AccessControl
-  /// @notice The admin can no longer create other admines.
+  /// @notice The admin can no longer create other admins.
   /// @dev This implementation was modeled off of code that can be found
   /// [here](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.9.6/contracts/access/AccessControlDefaultAdminRules.sol#L82).
 

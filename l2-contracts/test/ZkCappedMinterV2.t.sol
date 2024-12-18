@@ -370,7 +370,7 @@ contract SetMetadataURI is ZkCappedMinterV2Test {
 }
 
 contract GrantRole is ZkCappedMinterV2Test {
-  function testFuzz_AdminCannotGrantRole(address _newAdmin) public {
+  function testFuzz_AdminCannotGrantAdminRole(address _newAdmin) public {
     bytes32 _defaultAdminRole = cappedMinter.DEFAULT_ADMIN_ROLE();
     vm.prank(admin);
     vm.expectRevert(bytes("AccessControl: can't directly grant default admin role"));
