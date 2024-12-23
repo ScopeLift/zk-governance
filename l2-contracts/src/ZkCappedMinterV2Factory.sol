@@ -11,7 +11,7 @@ import {IMintable} from "src/interfaces/IMintable.sol";
 /// @custom:security-contact security@matterlabs.dev
 contract ZkCappedMinterV2Factory {
   /// @dev Bytecode hash of version 2 of the capped minter.
-  bytes32 public immutable BYTECODE_HASH = keccak256(type(ZkCappedMinterV2).creationCode);
+  bytes32 public immutable BYTECODE_HASH;
 
   /// @notice Emitted when a new ZkCappedMinterV2 is created.
   /// @param minterAddress The address of the newly deployed ZkCappedMinterV2.
@@ -28,6 +28,12 @@ contract ZkCappedMinterV2Factory {
     uint48 startTime,
     uint48 expirationTime
   );
+
+  constructor() {
+		  console2.logBytes(type(ZkCappedMinterV2).creationCode);
+		  console2.logBytes(type(ZkCappedMinterV2).creationCode % 32);
+		  BYTECODE_HASH = hashL2Bytecode(type(ZkCappedMinterV2).creationCode);
+  }
 
   /// @notice Deploys a new ZkCappedMinterV2 contract using CREATE2.
   /// @param _mintable The contract where tokens will be minted.
@@ -83,4 +89,19 @@ contract ZkCappedMinterV2Factory {
   function _calculateSalt(bytes memory _args, uint256 _saltNonce) internal view returns (bytes32) {
     return keccak256(abi.encode(_args, block.chainid, _saltNonce));
   }
+
+      function hashL2Bytecode(bytes memory _bytecode) internal pure returns (bytes32 hashedBytecode) {
+        // Note that the length of the bytecode must be provided in 32-byte words.
+        require(_bytecode.length % 32 == 0, "pq");
+
+        uint256 bytecodeLenInWords = _bytecode.length / 32;
+        require(bytecodeLenInWords < 2 ** 16, "pp"); // bytecode length must be less than 2^16 words
+        require(bytecodeLenInWords % 2 == 1, "ps"); // bytecode length in words must be odd
+        hashedBytecode = sha256(_bytecode) & 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+        // Setting the version of the hash
+        hashedBytecode = (hashedBytecode | bytes32(uint256(1 << 248)));
+        // Setting the length
+        hashedBytecode = hashedBytecode | bytes32(bytecodeLenInWords << 224);
+    }
+
 }
