@@ -9,13 +9,8 @@ import {IMintable} from "src/interfaces/IMintable.sol";
 /// @author [ScopeLift](https://scopelift.co)
 /// @notice Factory contract to deploy ZkCappedMinterV2 contracts using CREATE2.
 contract ZkCappedMinterV2Factory {
-  /// @dev Bytecode hash should be updated with the correct value from
-  /// ./zkout/ZkCappedMinterV2.sol/ZkCappedMinterV2.json.
-  bytes32 public immutable BYTECODE_HASH;
-
-  constructor(bytes32 _bytecodeHash) {
-    BYTECODE_HASH = _bytecodeHash;
-  }
+  /// @dev Bytecode hash of version 2 of the capped minter.
+  bytes32 public immutable BYTECODE_HASH = keccak256(type(ZkCappedMinterV2).creationCode);
 
   /// @notice Emitted when a new ZkCappedMinterV2 is created.
   /// @param minterAddress The address of the newly deployed ZkCappedMinterV2.
