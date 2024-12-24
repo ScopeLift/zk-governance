@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import {L2ContractHelper} from "src/lib/L2ContractHelper.sol";
 import {ZkCappedMinterV2} from "src/ZkCappedMinterV2.sol";
 import {IMintable} from "src/interfaces/IMintable.sol";
+import {console2} from "forge-std/Test.sol";
 
 /// @title ZkCappedMinterV2Factory
 /// @author [ScopeLift](https://scopelift.co)
@@ -30,9 +31,9 @@ contract ZkCappedMinterV2Factory {
   );
 
   constructor() {
-		  console2.logBytes(type(ZkCappedMinterV2).creationCode);
-		  console2.logBytes(type(ZkCappedMinterV2).creationCode % 32);
-		  BYTECODE_HASH = hashL2Bytecode(type(ZkCappedMinterV2).creationCode);
+    console2.logBytes(type(ZkCappedMinterV2).creationCode);
+    console2.logUint(type(ZkCappedMinterV2).creationCode.length % 32);
+    BYTECODE_HASH = hashL2Bytecode(type(ZkCappedMinterV2).creationCode);
   }
 
   /// @notice Deploys a new ZkCappedMinterV2 contract using CREATE2.
@@ -90,18 +91,17 @@ contract ZkCappedMinterV2Factory {
     return keccak256(abi.encode(_args, block.chainid, _saltNonce));
   }
 
-      function hashL2Bytecode(bytes memory _bytecode) internal pure returns (bytes32 hashedBytecode) {
-        // Note that the length of the bytecode must be provided in 32-byte words.
-        require(_bytecode.length % 32 == 0, "pq");
+  function hashL2Bytecode(bytes memory _bytecode) internal pure returns (bytes32 hashedBytecode) {
+    // Note that the length of the bytecode must be provided in 32-byte words.
+    require(_bytecode.length % 32 == 0, "pq");
 
-        uint256 bytecodeLenInWords = _bytecode.length / 32;
-        require(bytecodeLenInWords < 2 ** 16, "pp"); // bytecode length must be less than 2^16 words
-        require(bytecodeLenInWords % 2 == 1, "ps"); // bytecode length in words must be odd
-        hashedBytecode = sha256(_bytecode) & 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-        // Setting the version of the hash
-        hashedBytecode = (hashedBytecode | bytes32(uint256(1 << 248)));
-        // Setting the length
-        hashedBytecode = hashedBytecode | bytes32(bytecodeLenInWords << 224);
-    }
-
+    uint256 bytecodeLenInWords = _bytecode.length / 32;
+    require(bytecodeLenInWords < 2 ** 16, "pp"); // bytecode length must be less than 2^16 words
+    require(bytecodeLenInWords % 2 == 1, "ps"); // bytecode length in words must be odd
+    hashedBytecode = sha256(_bytecode) & 0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    // Setting the version of the hash
+    hashedBytecode = (hashedBytecode | bytes32(uint256(1 << 248)));
+    // Setting the length
+    hashedBytecode = hashedBytecode | bytes32(bytecodeLenInWords << 224);
+  }
 }
