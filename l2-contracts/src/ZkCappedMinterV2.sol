@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 import {IMintable} from "src/interfaces/IMintable.sol";
+import {console2} from "forge-std/Test.sol";
 
 /// @title ZkCappedMinterV2
 /// @author [ScopeLift](https://scopelift.co)
