@@ -43,6 +43,12 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice Emitted when the mintable contract is updated.
   event MintableUpdated(IMintable indexed previousMintable, IMintable indexed newMintable);
 
+  /// @notice Emitted when the mint rate limit is updated.
+  event MintRateLimitUpdated(uint256 indexed previousMintRateLimit, uint256 indexed newMintRateLimit);
+
+  /// @notice Emitted when the mint rate limit window is updated.
+  event MintRateLimitWindowUpdated(uint48 indexed previousMintRateLimitWindow, uint48 indexed newMintRateLimitWindow);
+
   /// @notice Emitted when tokens are minted.
   event Minted(address indexed minter, address indexed to, uint256 amount);
 
@@ -94,6 +100,24 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
     _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     emit MintableUpdated(mintable, _mintable);
     mintable = _mintable;
+  }
+
+  /// @notice Updates the maximum number of tokens that can be minted during the rate limit window.
+  /// @param _mintRateLimit The new maximum number of tokens that can be minted during the rate limit window.
+  /// @dev Only callable by addresses with the DEFAULT_ADMIN_ROLE.
+  function updateMintRateLimit(uint256 _mintRateLimit) external {
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    emit MintRateLimitUpdated(mintRateLimit, _mintRateLimit);
+    mintRateLimit = _mintRateLimit;
+  }
+
+  /// @notice Updates the duration of the rate limit window in seconds.
+  /// @param _mintRateLimitWindow The new duration of the rate limit window in seconds.
+  /// @dev Only callable by addresses with the DEFAULT_ADMIN_ROLE.
+  function updateMintRateLimitWindow(uint48 _mintRateLimitWindow) external {
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    emit MintRateLimitWindowUpdated(mintRateLimitWindow, _mintRateLimitWindow);
+    mintRateLimitWindow = _mintRateLimitWindow;
   }
 
   /// @notice Pauses token minting
