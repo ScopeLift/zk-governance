@@ -51,9 +51,88 @@ contract Mint is ZkMinterRateLimiterV1Test {
   }
 
   function testFuzz_MintsSuccessfullyAsMinter(address _to, uint256 _amount) public {
-    _amount = bound(_amount, 1, DEFAULT_CAP);
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, CAP_PER_MINT_PERIOD);
+
     vm.prank(minter);
     minterRateLimiter.mint(_to, _amount);
+    assertEq(token.balanceOf(_to), _amount);
+    assertEq(minterRateLimiter.mintedInPeriod(minterRateLimiter.currentMintPeriodStart()), _amount);
+  }
+
+  function testFuzz_EmitsMintedEvent(address _to, uint256 _amount) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, CAP_PER_MINT_PERIOD);
+
+    vm.prank(minter);
+    vm.expectEmit();
+    emit ZkMinterRateLimiterV1.Minted(minter, _to, _amount);
+    minterRateLimiter.mint(_to, _amount);
+  }
+
+  function testFuzz_RevertIf_CapPerMintPeriodExceeded(address _to, uint256 _amount) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, CAP_PER_MINT_PERIOD + 1, DEFAULT_CAP);
+
+    vm.prank(minter);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__CapPerMintPeriodExceeded.selector, minter, _amount
+      )
+    );
+    minterRateLimiter.mint(_to, _amount);
+  }
+
+  function testFuzz_RevertIf_CapPerMintPeriodExceededAfterTwoMintsInTheSamePeriod(
+    address _to,
+    uint256 _amount,
+    uint256 _exceedingAmount
+  ) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, CAP_PER_MINT_PERIOD);
+    _exceedingAmount = bound(_exceedingAmount, 1, type(uint256).max);
+
+    vm.startPrank(minter);
+    minterRateLimiter.mint(_to, _amount);
+    minterRateLimiter.mint(_to, CAP_PER_MINT_PERIOD - _amount);
+    assertEq(minterRateLimiter.mintedInPeriod(minterRateLimiter.currentMintPeriodStart()), CAP_PER_MINT_PERIOD);
+    vm.stopPrank();
+
+    vm.prank(minter);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__CapPerMintPeriodExceeded.selector, minter, _exceedingAmount
+      )
+    );
+    minterRateLimiter.mint(_to, _exceedingAmount);
+  }
+
+  function testFuzz_RevertIf_CapPerMintPeriodExceededAfterTwoMintsInDifferentPeriods(
+    address _to,
+    uint256 _amount,
+    uint256 _exceedingAmount
+  ) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, CAP_PER_MINT_PERIOD);
+    _exceedingAmount = bound(_exceedingAmount, 1, type(uint256).max);
+
+    vm.startPrank(minter);
+    minterRateLimiter.mint(_to, _amount);
+    minterRateLimiter.mint(_to, CAP_PER_MINT_PERIOD - _amount);
+
+    vm.warp(block.timestamp + MINT_PERIOD);
+
+    minterRateLimiter.mint(_to, _amount);
+    minterRateLimiter.mint(_to, CAP_PER_MINT_PERIOD - _amount);
+    vm.stopPrank();
+
+    vm.prank(minter);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__CapPerMintPeriodExceeded.selector, minter, _exceedingAmount
+      )
+    );
+    minterRateLimiter.mint(_to, _exceedingAmount);
   }
 
   function testFuzz_RevertIf_NotMinter(address _nonMinter, address _to, uint256 _amount) public {
