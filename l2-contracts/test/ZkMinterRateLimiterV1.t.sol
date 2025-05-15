@@ -18,9 +18,9 @@ contract ZkMinterRateLimiterV1Test is ZkTokenTest {
 
   function test_InitializesMinterRateLimiterCorrectly() public {
     assertTrue(minterRateLimiter.hasRole(minterRateLimiter.DEFAULT_ADMIN_ROLE(), admin));
-    assertEq(address(minterRateLimiter.MINTABLE()), address(mintable));
-    assertEq(minterRateLimiter.CAP_PER_MINT_PERIOD(), CAP_PER_MINT_PERIOD);
-    assertEq(minterRateLimiter.MINT_PERIOD(), MINT_PERIOD);
+    assertEq(address(minterRateLimiter.mintable()), address(mintable));
+    assertEq(minterRateLimiter.capPerMintPeriod(), CAP_PER_MINT_PERIOD);
+    assertEq(minterRateLimiter.mintPeriod(), MINT_PERIOD);
   }
 }
 
@@ -34,9 +34,9 @@ contract Constructor is ZkMinterRateLimiterV1Test {
     ZkMinterRateLimiterV1 _minterRateLimiter =
       new ZkMinterRateLimiterV1(_mintable, _admin, _capPerMintPeriod, _mintPeriod);
 
-    assertEq(address(_minterRateLimiter.MINTABLE()), address(_mintable));
+    assertEq(address(_minterRateLimiter.mintable()), address(_mintable));
     assertTrue(_minterRateLimiter.hasRole(_minterRateLimiter.DEFAULT_ADMIN_ROLE(), _admin));
-    assertEq(_minterRateLimiter.CAP_PER_MINT_PERIOD(), _capPerMintPeriod);
-    assertEq(_minterRateLimiter.MINT_PERIOD(), _mintPeriod);
+    assertEq(_minterRateLimiter.capPerMintPeriod(), _capPerMintPeriod);
+    assertEq(_minterRateLimiter.mintPeriod(), _mintPeriod);
   }
 }

@@ -12,18 +12,18 @@ import {IMintable} from "src/interfaces/IMintable.sol";
 /// @custom:security-contact security@matterlabs.dev
 contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The contract where the tokens will be minted by an authorized minter.
-  IMintable public MINTABLE;
+  IMintable public mintable;
 
   /// @notice The maximum number of tokens that may be minted by the minter in a single mint period.
-  uint256 public CAP_PER_MINT_PERIOD;
+  uint256 public capPerMintPeriod;
 
   /// @notice The number of seconds in a mint period.
-  uint48 public MINT_PERIOD;
+  uint48 public mintPeriod;
 
   constructor(IMintable _mintable, address _admin, uint256 _capPerMintPeriod, uint48 _mintPeriod) {
-    MINTABLE = _mintable;
-    CAP_PER_MINT_PERIOD = _capPerMintPeriod;
-    MINT_PERIOD = _mintPeriod;
+    mintable = _mintable;
+    capPerMintPeriod = _capPerMintPeriod;
+    mintPeriod = _mintPeriod;
 
     _grantRole(DEFAULT_ADMIN_ROLE, _admin);
   }
