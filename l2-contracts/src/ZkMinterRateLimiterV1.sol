@@ -21,6 +21,8 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The number of seconds in a mint period.
   uint48 public mintPeriod;
 
+  bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
   constructor(ZkCappedMinterV2 _zkCappedMinter, address _admin, uint256 _capPerMintPeriod, uint48 _mintPeriod) {
     zkCappedMinter = _zkCappedMinter;
     capPerMintPeriod = _capPerMintPeriod;
@@ -29,7 +31,8 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
     _grantRole(DEFAULT_ADMIN_ROLE, _admin);
   }
 
-  function mint(address _to, uint256 _amount) external virtual {
+  function mint(address _to, uint256 _amount) external {
+    _checkRole(MINTER_ROLE, msg.sender);
     zkCappedMinter.mint(_to, _amount);
   }
 }
