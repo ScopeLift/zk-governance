@@ -33,6 +33,10 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// revoked by the DEFAULT_ADMIN_ROLE.
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
+  /// @notice The unique identifier constant used to represent the pauser role. An address that has this role may call
+  /// the `pause` method, pausing all minting operations. This role may be granted or revoked by the DEFAULT_ADMIN_ROLE.
+  bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
   /// @notice Whether the contract has been permanently closed.
   bool public closed;
 
@@ -65,6 +69,7 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
     START_TIME = uint48(block.timestamp);
 
     _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+    _grantRole(PAUSER_ROLE, _admin);
   }
 
   /// @notice Mints a given amount of tokens to a given address, so long as the rate limit is not exceeded.
@@ -72,6 +77,7 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @param _amount The quantity of tokens that will be minted.
   function mint(address _to, uint256 _amount) external {
     _revertIfClosed();
+    _requireNotPaused();
     _checkRole(MINTER_ROLE, msg.sender);
     uint48 _currentMintWindowStart = currentMintWindowStart();
     _revertIfRateLimitPerMintWindowExceeded(_currentMintWindowStart, _amount);
@@ -88,6 +94,18 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
     _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     emit MintableUpdated(mintable, _mintable);
     mintable = _mintable;
+  }
+
+  /// @notice Pauses token minting
+  function pause() external {
+    _checkRole(PAUSER_ROLE, msg.sender);
+    _pause();
+  }
+
+  /// @notice Unpauses token minting
+  function unpause() external {
+    _checkRole(PAUSER_ROLE, msg.sender);
+    _unpause();
   }
 
   /// @notice Permanently closes the contract, preventing any future minting.
