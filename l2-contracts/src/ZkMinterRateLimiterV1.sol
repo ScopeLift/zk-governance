@@ -4,12 +4,13 @@ pragma solidity 0.8.24;
 import {IMintable} from "src/interfaces/IMintable.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-
+import {console2} from "forge-std/console2.sol";
 /// @title ZkMinterRateLimiterV1
 /// @author [ScopeLift](https://scopelift.co)
 /// @notice A contract that implements rate limiting for token minting, allowing authorized minters to collectively mint
 /// up to a specified amount within a configurable time period.
 /// @custom:security-contact security@matterlabs.dev
+
 contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The contract where the tokens will be minted by an authorized minter.
   IMintable public mintable;
@@ -19,6 +20,9 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
 
   /// @notice The number of seconds in a mint rate limit window.
   uint48 public mintRateLimitWindow;
+
+  /// @notice The role identifier for addresses that are authorized to mint tokens.
+  bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
   /// @notice Initializes the rate limiter with the mintable contract, admin, mint rate limit, and mint rate limit
   /// window.
@@ -38,7 +42,10 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice Mints a given amount of tokens to a given address, so long as the rate limit is not exceeded.
   /// @param _to The address that will receive the new tokens.
   /// @param _amount The quantity of tokens that will be minted.
-  function mint(address _to, uint256 _amount) external virtual {
+  function mint(address _to, uint256 _amount) external {
+    console2.log("minting");
+    _checkRole(MINTER_ROLE, msg.sender);
+    console2.log("minting 2");
     mintable.mint(_to, _amount);
   }
 }
