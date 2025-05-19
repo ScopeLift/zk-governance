@@ -26,7 +26,7 @@ contract ZkMinterRateLimiterV1Test is ZkCappedMinterV2Test {
 
 contract Constructor is ZkMinterRateLimiterV1Test {
   function testFuzz_InitializesMinterRateLimiterCorrectly(
-    ZkCappedMinterV2 _zkCappedMinter,
+    IMintable _mintable,
     address _admin,
     uint256 _mintRateLimit,
     uint48 _mintRateLimitWindow
@@ -34,7 +34,7 @@ contract Constructor is ZkMinterRateLimiterV1Test {
     ZkMinterRateLimiterV1 _minterRateLimiter =
       new ZkMinterRateLimiterV1(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow);
 
-    assertEq(address(_minterRateLimiter.zkCappedMinter()), address(_zkCappedMinter));
+    assertEq(address(_minterRateLimiter.mintable()), address(_mintable));
     assertTrue(_minterRateLimiter.hasRole(_minterRateLimiter.DEFAULT_ADMIN_ROLE(), _admin));
     assertEq(_minterRateLimiter.mintRateLimit(), _mintRateLimit);
     assertEq(_minterRateLimiter.mintRateLimitWindow(), _mintRateLimitWindow);

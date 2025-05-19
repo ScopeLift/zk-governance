@@ -12,7 +12,7 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 /// @custom:security-contact security@matterlabs.dev
 contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The contract where the tokens will be minted by an authorized minter.
-  ZkCappedMinterV2 public zkCappedMinter;
+  IMintable public mintable;
 
   /// @notice The maximum number of tokens that may be minted by the minter in a single mint rate limit window.
   uint256 public mintRateLimit;
