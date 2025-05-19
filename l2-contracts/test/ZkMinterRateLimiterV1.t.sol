@@ -18,6 +18,11 @@ contract ZkMinterRateLimiterV1Test is ZkCappedMinterV2Test {
     _grantMinterRole(cappedMinter, cappedMinterAdmin, address(minterRateLimiter));
   }
 
+  function _grantRateLimiterMinterRole(address _minter) internal {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(MINTER_ROLE, _minter);
+  }
+
   function test_InitializesMinterRateLimiterCorrectly() public {
     assertTrue(minterRateLimiter.hasRole(minterRateLimiter.DEFAULT_ADMIN_ROLE(), admin));
     assertEq(address(minterRateLimiter.mintable()), address(mintable));
@@ -44,26 +49,23 @@ contract Constructor is ZkMinterRateLimiterV1Test {
 }
 
 contract Mint is ZkMinterRateLimiterV1Test {
-  address public minter = makeAddr("minter");
-
-  function setUp() public override {
-    super.setUp();
-    vm.startPrank(admin);
-    minterRateLimiter.grantRole(MINTER_ROLE, minter);
-    vm.stopPrank();
-  }
-
-  function testFuzz_MintsSuccessfullyAsMinter(address _to, uint256 _amount) public {
+  function testFuzz_MintsSuccessfullyAsMinter(address _minter, address _to, uint256 _amount) public {
     _amount = bound(_amount, 1, DEFAULT_CAP);
-    vm.prank(minter);
+    vm.assume(_to != address(0));
+    _grantRateLimiterMinterRole(_minter);
+
+    vm.prank(_minter);
     minterRateLimiter.mint(_to, _amount);
   }
 
-  function testFuzz_RevertIf_NotMinter(address _nonMinter, address _to, uint256 _amount) public {
-    vm.assume(_nonMinter != minter);
-    vm.startPrank(_nonMinter);
+  function testFuzz_RevertIf_CalledByNonMinter(address _minter, address _nonMinter, address _to, uint256 _amount)
+    public
+  {
+    vm.assume(_nonMinter != _minter);
+    _grantRateLimiterMinterRole(_minter);
+
+    vm.prank(_nonMinter);
     vm.expectRevert(_formatAccessControlError(_nonMinter, MINTER_ROLE));
     minterRateLimiter.mint(_to, _amount);
-    vm.stopPrank();
   }
 }
