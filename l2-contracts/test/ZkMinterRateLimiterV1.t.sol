@@ -79,6 +79,18 @@ contract Mint is ZkMinterRateLimiterV1Test {
     minterRateLimiter.mint(_to, _amount);
   }
 
+  function testFuzz_MintRateLimitIsResetAfterWindow(address _to, uint256 _amount) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, MINT_RATE_LIMIT);
+
+    vm.startPrank(minter);
+    while (block.timestamp < cappedMinter.EXPIRATION_TIME() && cappedMinter.minted() + _amount < cappedMinter.CAP()) {
+      minterRateLimiter.mint(_to, _amount);
+      vm.warp(block.timestamp + MINT_RATE_LIMIT_WINDOW);
+    }
+    vm.stopPrank();
+  }
+
   function testFuzz_RevertIf_MintRateLimitExceeded(address _to, uint256 _amount) public {
     vm.assume(_to != address(0));
     _amount = bound(_amount, MINT_RATE_LIMIT + 1, type(uint256).max);

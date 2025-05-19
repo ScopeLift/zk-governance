@@ -70,7 +70,7 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice Calculates the start timestamp of the current mint window.
   /// @return The timestamp marking the start of the current mint window.
   function currentMintWindowStart() public view returns (uint48) {
-    return uint48(block.timestamp - (block.timestamp - START_TIME) % mintRateLimitWindow);
+    return uint48(block.timestamp - ((block.timestamp - START_TIME) % mintRateLimitWindow));
   }
 
   /// @notice Calculates how many tokens are still available to mint in a given window.
