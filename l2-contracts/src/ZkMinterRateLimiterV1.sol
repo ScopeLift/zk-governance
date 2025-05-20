@@ -35,7 +35,7 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice Emitted when tokens are minted.
   event Minted(address indexed minter, address indexed to, uint256 amount);
 
-  /// @notice Error for when the rate limit per mint window is exceeded.
+  /// @notice Error for when the rate limit is exceeded.
   error ZkMinterRateLimiterV1__MintRateLimitExceeded(address minter, uint256 amount);
 
   /// @notice Initializes the rate limiter with the mintable contract, admin, mint rate limit, and mint rate limit
@@ -76,15 +76,15 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice Calculates how many tokens are still available to mint in a given window.
   /// @param _windowStart The timestamp marking the start of the window.
   /// @return The number of tokens that can still be minted in the given window.
-  function _amountAvailableForMintInWindow(uint48 _windowStart) internal view returns (uint256) {
+  function _remainingMintAllowance(uint48 _windowStart) internal view returns (uint256) {
     return mintRateLimit - mintedInWindow[_windowStart];
   }
 
-  /// @notice Reverts if the rate limit per mint window is exceeded.
+  /// @notice Reverts if the rate limit is exceeded.
   /// @param _windowStart The timestamp marking the start of the window.
   /// @param _amount The amount of tokens that will be minted.
   function _revertIfRateLimitPerMintWindowExceeded(uint48 _windowStart, uint256 _amount) internal view {
-    if (_amount > _amountAvailableForMintInWindow(_windowStart)) {
+    if (_amount > _remainingMintAllowance(_windowStart)) {
       revert ZkMinterRateLimiterV1__MintRateLimitExceeded(msg.sender, _amount);
     }
   }
