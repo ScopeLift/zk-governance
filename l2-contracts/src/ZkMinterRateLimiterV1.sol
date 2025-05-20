@@ -22,10 +22,11 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
 
   /// @notice Initializes the rate limiter with the mintable contract, admin, mint rate limit, and mint rate limit
   /// window.
-  /// @param _mintable The contract where tokens will be minted.
+  /// @param _mintable A contract used as a target when calling mint. Any contract that conforms to the IMintable
+  /// interface can be used, but in most cases this will be another `ZKMinter` extension or `ZKCappedMinter`.
   /// @param _admin The address that will have admin privileges.
-  /// @param _mintRateLimit The maximum number of tokens that can be minted per mint rate limit window.
-  /// @param _mintRateLimitWindow The duration of each mint rate limit window in seconds.
+  /// @param _mintRateLimit The maximum number of tokens that can be minted during the rate limit window.
+  /// @param _mintRateLimitWindow The duration of the rate limit window in seconds.
   constructor(IMintable _mintable, address _admin, uint256 _mintRateLimit, uint48 _mintRateLimitWindow) {
     mintable = _mintable;
     mintRateLimit = _mintRateLimit;
