@@ -21,7 +21,9 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The number of seconds in a mint rate limit window.
   uint48 public mintRateLimitWindow;
 
-  /// @notice The role identifier for addresses that are authorized to mint tokens.
+  /// @notice The unique identifier constant used to represent the minter role. An address that has this role may call
+  /// the `mint` method, creating new tokens and assigning them to specified address. This role may be granted or
+  /// revoked by the DEFAULT_ADMIN_ROLE.
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
   /// @notice Initializes the rate limiter with the mintable contract, admin, mint rate limit, and mint rate limit
