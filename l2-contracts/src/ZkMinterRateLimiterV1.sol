@@ -4,13 +4,12 @@ pragma solidity 0.8.24;
 import {IMintable} from "src/interfaces/IMintable.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-import {console2} from "forge-std/console2.sol";
+
 /// @title ZkMinterRateLimiterV1
 /// @author [ScopeLift](https://scopelift.co)
 /// @notice A contract that implements rate limiting for token minting, allowing authorized minters to collectively mint
 /// up to a specified amount within a configurable time period.
 /// @custom:security-contact security@matterlabs.dev
-
 contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The contract where the tokens will be minted by an authorized minter.
   IMintable public mintable;
