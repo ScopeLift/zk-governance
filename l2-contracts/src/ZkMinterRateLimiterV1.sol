@@ -10,6 +10,7 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 /// @notice A contract that implements rate limiting for token minting, allowing authorized minters to collectively mint
 /// up to a specified amount within a configurable time period.
 /// @custom:security-contact security@matterlabs.dev
+
 contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice The contract where the tokens will be minted by an authorized minter.
   IMintable public mintable;
@@ -19,6 +20,11 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
 
   /// @notice The number of seconds in a mint rate limit window.
   uint48 public mintRateLimitWindow;
+
+  /// @notice The unique identifier constant used to represent the minter role. An address that has this role may call
+  /// the `mint` method, creating new tokens and assigning them to specified address. This role may be granted or
+  /// revoked by the DEFAULT_ADMIN_ROLE.
+  bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
   /// @notice Initializes the rate limiter with the mintable contract, admin, mint rate limit, and mint rate limit
   /// window.
@@ -38,7 +44,8 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @notice Mints a given amount of tokens to a given address, so long as the rate limit is not exceeded.
   /// @param _to The address that will receive the new tokens.
   /// @param _amount The quantity of tokens that will be minted.
-  function mint(address _to, uint256 _amount) external virtual {
+  function mint(address _to, uint256 _amount) external {
+    _checkRole(MINTER_ROLE, msg.sender);
     mintable.mint(_to, _amount);
   }
 }
