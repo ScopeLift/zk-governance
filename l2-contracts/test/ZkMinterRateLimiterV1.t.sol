@@ -172,6 +172,15 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.expectRevert(_formatAccessControlError(_nonMinter, MINTER_ROLE));
     minterRateLimiter.mint(_to, _amount);
   }
+
+  function testFuzz_RevertIf_MintAfterContractIsClosed(address _caller, address _to, uint256 _amount) public {
+    vm.prank(admin);
+    minterRateLimiter.close();
+
+    vm.prank(_caller);
+    vm.expectRevert(ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__ContractClosed.selector);
+    minterRateLimiter.mint(_to, _amount);
+  }
 }
 
 contract GrantRole is ZkMinterRateLimiterV1Test {
@@ -227,15 +236,6 @@ contract Close is ZkMinterRateLimiterV1Test {
     vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
     minterRateLimiter.close();
     vm.stopPrank();
-  }
-
-  function testFuzz_RevertIf_ContractIsCalledAfterItIsClosed(address _caller, address _to, uint256 _amount) public {
-    vm.prank(admin);
-    minterRateLimiter.close();
-
-    vm.prank(_caller);
-    vm.expectRevert(ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__ContractClosed.selector);
-    minterRateLimiter.mint(_to, _amount);
   }
 }
 
