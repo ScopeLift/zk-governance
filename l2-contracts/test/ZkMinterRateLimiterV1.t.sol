@@ -49,13 +49,117 @@ contract Constructor is ZkMinterRateLimiterV1Test {
 }
 
 contract Mint is ZkMinterRateLimiterV1Test {
+  address public minter = makeAddr("minter");
+
+  function setUp() public override {
+    super.setUp();
+    vm.startPrank(admin);
+    minterRateLimiter.grantRole(MINTER_ROLE, minter);
+    vm.stopPrank();
+  }
+
   function testFuzz_MintsSuccessfullyAsMinter(address _minter, address _to, uint256 _amount) public {
-    _amount = bound(_amount, 1, DEFAULT_CAP);
     vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, MINT_RATE_LIMIT);
     _grantRateLimiterMinterRole(_minter);
 
     vm.prank(_minter);
     minterRateLimiter.mint(_to, _amount);
+    assertEq(token.balanceOf(_to), _amount);
+    assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), _amount);
+  }
+
+  function testFuzz_EmitsMintedEvent(address _to, uint256 _amount) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, MINT_RATE_LIMIT);
+
+    vm.prank(minter);
+    vm.expectEmit();
+    emit ZkMinterRateLimiterV1.Minted(minter, _to, _amount);
+    minterRateLimiter.mint(_to, _amount);
+  }
+
+  function testFuzz_MintRateLimitIsResetAfterWindow(address _to, uint256 _amount) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, MINT_RATE_LIMIT);
+
+    vm.startPrank(minter);
+    // Mint up to 5 times while staying within the IMintable contract's expiration time and mint cap.
+    for (
+      uint256 i = 0;
+      i < 5 && block.timestamp < cappedMinter.EXPIRATION_TIME() && cappedMinter.minted() + _amount < cappedMinter.CAP();
+      i++
+    ) {
+      minterRateLimiter.mint(_to, _amount);
+      assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), _amount);
+      vm.warp(block.timestamp + MINT_RATE_LIMIT_WINDOW);
+    }
+    vm.stopPrank();
+  }
+
+  function testFuzz_RevertIf_MintRateLimitExceeded(address _to, uint256 _amount) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, MINT_RATE_LIMIT + 1, type(uint256).max);
+
+    vm.prank(minter);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__MintRateLimitExceeded.selector, minter, _amount
+      )
+    );
+    minterRateLimiter.mint(_to, _amount);
+  }
+
+  function testFuzz_RevertIf_MintRateLimitExceededAfterTwoMintsInTheSameWindow(
+    address _to,
+    uint256 _amount,
+    uint256 _exceedingAmount
+  ) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, MINT_RATE_LIMIT);
+    _exceedingAmount = bound(_exceedingAmount, 1, type(uint256).max);
+
+    vm.startPrank(minter);
+    minterRateLimiter.mint(_to, _amount);
+    minterRateLimiter.mint(_to, MINT_RATE_LIMIT - _amount);
+    assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), MINT_RATE_LIMIT);
+    vm.stopPrank();
+
+    vm.prank(minter);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__MintRateLimitExceeded.selector, minter, _exceedingAmount
+      )
+    );
+    minterRateLimiter.mint(_to, _exceedingAmount);
+  }
+
+  function testFuzz_RevertIf_MintRateLimitExceededAfterTwoMintsInDifferentWindows(
+    address _to,
+    uint256 _amount,
+    uint256 _exceedingAmount
+  ) public {
+    vm.assume(_to != address(0));
+    _amount = bound(_amount, 1, MINT_RATE_LIMIT);
+    _exceedingAmount = bound(_exceedingAmount, 1, type(uint256).max);
+
+    vm.startPrank(minter);
+    minterRateLimiter.mint(_to, _amount);
+    minterRateLimiter.mint(_to, MINT_RATE_LIMIT - _amount);
+
+    vm.warp(block.timestamp + MINT_RATE_LIMIT_WINDOW);
+
+    minterRateLimiter.mint(_to, _amount);
+    minterRateLimiter.mint(_to, MINT_RATE_LIMIT - _amount);
+    vm.stopPrank();
+
+    vm.prank(minter);
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__MintRateLimitExceeded.selector, minter, _exceedingAmount
+      )
+    );
+    minterRateLimiter.mint(_to, _exceedingAmount);
   }
 
   function testFuzz_RevertIf_CalledByNonMinter(address _minter, address _nonMinter, address _to, uint256 _amount)
