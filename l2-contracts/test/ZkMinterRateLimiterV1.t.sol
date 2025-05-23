@@ -172,4 +172,93 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.expectRevert(_formatAccessControlError(_nonMinter, MINTER_ROLE));
     minterRateLimiter.mint(_to, _amount);
   }
+
+  function testFuzz_RevertIf_MintAfterContractIsClosed(address _caller, address _to, uint256 _amount) public {
+    vm.prank(admin);
+    minterRateLimiter.close();
+
+    vm.prank(_caller);
+    vm.expectRevert(ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__ContractClosed.selector);
+    minterRateLimiter.mint(_to, _amount);
+  }
+}
+
+contract GrantRole is ZkMinterRateLimiterV1Test {
+  function testFuzz_CanGrantAdminRoleToOtherAddresses(address _newAdmin) public {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(DEFAULT_ADMIN_ROLE, _newAdmin);
+    assertTrue(minterRateLimiter.hasRole(DEFAULT_ADMIN_ROLE, _newAdmin));
+  }
+
+  function testFuzz_RevertIf_GrantRoleCalledByNonAdmin(address _nonAdmin, address _newAdmin) public {
+    vm.assume(_nonAdmin != admin);
+    vm.startPrank(_nonAdmin);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    minterRateLimiter.grantRole(DEFAULT_ADMIN_ROLE, _newAdmin);
+    vm.stopPrank();
+  }
+}
+
+contract RenounceRole is ZkMinterRateLimiterV1Test {
+  function testFuzz_AdminCanRenounceAdminRole(address _renouncer) public {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(DEFAULT_ADMIN_ROLE, _renouncer);
+
+    vm.prank(_renouncer);
+    minterRateLimiter.renounceRole(DEFAULT_ADMIN_ROLE, _renouncer);
+    assertEq(minterRateLimiter.hasRole(DEFAULT_ADMIN_ROLE, _renouncer), false);
+  }
+}
+
+contract Close is ZkMinterRateLimiterV1Test {
+  function testFuzz_AdminCanCloseContract(address _closer) public {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(DEFAULT_ADMIN_ROLE, _closer);
+
+    vm.prank(_closer);
+    minterRateLimiter.close();
+    assertEq(minterRateLimiter.closed(), true);
+  }
+
+  function testFuzz_EmitsClosedEvent(address _closer) public {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(DEFAULT_ADMIN_ROLE, _closer);
+
+    vm.prank(_closer);
+    vm.expectEmit();
+    emit ZkMinterRateLimiterV1.Closed(_closer);
+    minterRateLimiter.close();
+  }
+
+  function testFuzz_RevertIf_CalledByNonAdmin(address _nonAdmin) public {
+    vm.assume(_nonAdmin != admin);
+    vm.startPrank(_nonAdmin);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    minterRateLimiter.close();
+    vm.stopPrank();
+  }
+}
+
+contract UpdateMintable is ZkMinterRateLimiterV1Test {
+  function testFuzz_AdminCanUpdateMintable(IMintable _newMintable) public {
+    vm.prank(admin);
+    minterRateLimiter.updateMintable(_newMintable);
+    assertEq(address(minterRateLimiter.mintable()), address(_newMintable));
+  }
+
+  function testFuzz_EmitsMintableUpdatedEvent(IMintable _newMintable) public {
+    vm.startPrank(admin);
+    vm.expectEmit();
+    emit ZkMinterRateLimiterV1.MintableUpdated(minterRateLimiter.mintable(), _newMintable);
+    minterRateLimiter.updateMintable(_newMintable);
+    vm.stopPrank();
+  }
+
+  function testFuzz_RevertIf_CalledByNonAdmin(address _nonAdmin, IMintable _newMintable) public {
+    vm.assume(_nonAdmin != admin);
+    vm.startPrank(_nonAdmin);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    minterRateLimiter.updateMintable(_newMintable);
+    vm.stopPrank();
+  }
 }

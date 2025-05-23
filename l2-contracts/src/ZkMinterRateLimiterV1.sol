@@ -11,7 +11,9 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 /// up to a specified amount within a configurable time period.
 /// @custom:security-contact security@matterlabs.dev
 contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
-  /// @notice The contract where the tokens will be minted by an authorized minter.
+  /// @notice A contract used as a target when calling mint.
+  /// @dev Any contract that conforms to the IMintable interface can be used, but in most cases this will be another
+  /// `ZKMinter` extension or `ZKCappedMinter`.
   IMintable public mintable;
 
   /// @notice The number of tokens minted in each mint window.
@@ -31,11 +33,23 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// revoked by the DEFAULT_ADMIN_ROLE.
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
+  /// @notice Whether the contract has been permanently closed.
+  bool public closed;
+
+  /// @notice Emitted when the mintable contract is updated.
+  event MintableUpdated(IMintable indexed previousMintable, IMintable indexed newMintable);
+
   /// @notice Emitted when tokens are minted.
   event Minted(address indexed minter, address indexed to, uint256 amount);
 
+  /// @notice Emitted when the contract is closed.
+  event Closed(address _closer);
+
   /// @notice Error for when the rate limit is exceeded.
   error ZkMinterRateLimiterV1__MintRateLimitExceeded(address minter, uint256 amount);
+
+  /// @notice Error for when the contract is closed.
+  error ZkMinterRateLimiterV1__ContractClosed();
 
   /// @notice Initializes the rate limiter with the mintable contract, admin, mint rate limit, and mint rate limit
   /// window.
@@ -57,6 +71,7 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   /// @param _to The address that will receive the new tokens.
   /// @param _amount The quantity of tokens that will be minted.
   function mint(address _to, uint256 _amount) external {
+    _revertIfClosed();
     _checkRole(MINTER_ROLE, msg.sender);
     uint48 _currentMintWindowStart = currentMintWindowStart();
     _revertIfRateLimitPerMintWindowExceeded(_currentMintWindowStart, _amount);
@@ -64,6 +79,24 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
     mintedInWindow[_currentMintWindowStart] += _amount;
     mintable.mint(_to, _amount);
     emit Minted(msg.sender, _to, _amount);
+  }
+
+  /// @notice Updates the mintable contract that this rate limiter will use for minting.
+  /// @param _mintable The new mintable contract to use.
+  /// @dev Only callable by addresses with the DEFAULT_ADMIN_ROLE.
+  function updateMintable(IMintable _mintable) external {
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    emit MintableUpdated(mintable, _mintable);
+    mintable = _mintable;
+  }
+
+  /// @notice Permanently closes the contract, preventing any future minting.
+  /// @dev Once closed, the contract cannot be reopened and all minting operations will be permanently blocked.
+  /// @dev Only callable by the admin.
+  function close() external {
+    _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    closed = true;
+    emit Closed(msg.sender);
   }
 
   /// @notice Calculates the start timestamp of the current mint window.
@@ -85,6 +118,13 @@ contract ZkMinterRateLimiterV1 is IMintable, AccessControl, Pausable {
   function _revertIfRateLimitPerMintWindowExceeded(uint48 _windowStart, uint256 _amount) internal view {
     if (_amount > _remainingMintAllowance(_windowStart)) {
       revert ZkMinterRateLimiterV1__MintRateLimitExceeded(msg.sender, _amount);
+    }
+  }
+
+  /// @notice Reverts if the contract is closed.
+  function _revertIfClosed() internal view {
+    if (closed) {
+      revert ZkMinterRateLimiterV1__ContractClosed();
     }
   }
 }
