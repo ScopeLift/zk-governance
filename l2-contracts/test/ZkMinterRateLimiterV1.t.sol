@@ -304,3 +304,53 @@ contract UpdateMintable is ZkMinterRateLimiterV1Test {
     vm.stopPrank();
   }
 }
+
+contract UpdateMintRateLimit is ZkMinterRateLimiterV1Test {
+  function testFuzz_AdminCanUpdateMintRateLimit(uint256 _newMintRateLimit) public {
+    vm.prank(admin);
+    minterRateLimiter.updateMintRateLimit(_newMintRateLimit);
+    assertEq(minterRateLimiter.mintRateLimit(), _newMintRateLimit);
+  }
+
+  function testFuzz_EmitsMintRateLimitUpdatedEvent(uint256 _newMintRateLimit) public {
+    vm.startPrank(admin);
+    vm.expectEmit();
+    emit ZkMinterRateLimiterV1.MintRateLimitUpdated(minterRateLimiter.mintRateLimit(), _newMintRateLimit);
+    minterRateLimiter.updateMintRateLimit(_newMintRateLimit);
+    vm.stopPrank();
+  }
+
+  function testFuzz_RevertIf_CalledByNonAdmin(address _nonAdmin, uint256 _newMintRateLimit) public {
+    vm.assume(_nonAdmin != admin);
+    vm.startPrank(_nonAdmin);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    minterRateLimiter.updateMintRateLimit(_newMintRateLimit);
+    vm.stopPrank();
+  }
+}
+
+contract UpdateMintRateLimitWindow is ZkMinterRateLimiterV1Test {
+  function testFuzz_AdminCanUpdateMintRateLimitWindow(uint48 _newMintRateLimitWindow) public {
+    vm.prank(admin);
+    minterRateLimiter.updateMintRateLimitWindow(_newMintRateLimitWindow);
+    assertEq(minterRateLimiter.mintRateLimitWindow(), _newMintRateLimitWindow);
+  }
+
+  function testFuzz_EmitsMintRateLimitWindowUpdatedEvent(uint48 _newMintRateLimitWindow) public {
+    vm.startPrank(admin);
+    vm.expectEmit();
+    emit ZkMinterRateLimiterV1.MintRateLimitWindowUpdated(
+      minterRateLimiter.mintRateLimitWindow(), _newMintRateLimitWindow
+    );
+    minterRateLimiter.updateMintRateLimitWindow(_newMintRateLimitWindow);
+    vm.stopPrank();
+  }
+
+  function testFuzz_RevertIf_CalledByNonAdmin(address _nonAdmin, uint48 _newMintRateLimitWindow) public {
+    vm.assume(_nonAdmin != admin);
+    vm.startPrank(_nonAdmin);
+    vm.expectRevert(_formatAccessControlError(_nonAdmin, DEFAULT_ADMIN_ROLE));
+    minterRateLimiter.updateMintRateLimitWindow(_newMintRateLimitWindow);
+    vm.stopPrank();
+  }
+}
