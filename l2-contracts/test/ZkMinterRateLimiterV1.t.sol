@@ -25,6 +25,7 @@ contract ZkMinterRateLimiterV1Test is ZkCappedMinterV2Test {
 
   function test_InitializesMinterRateLimiterCorrectly() public {
     assertTrue(minterRateLimiter.hasRole(minterRateLimiter.DEFAULT_ADMIN_ROLE(), admin));
+    assertTrue(minterRateLimiter.hasRole(minterRateLimiter.PAUSER_ROLE(), admin));
     assertEq(address(minterRateLimiter.mintable()), address(mintable));
     assertEq(minterRateLimiter.mintRateLimit(), MINT_RATE_LIMIT);
     assertEq(minterRateLimiter.mintRateLimitWindow(), MINT_RATE_LIMIT_WINDOW);
@@ -207,6 +208,47 @@ contract RenounceRole is ZkMinterRateLimiterV1Test {
     vm.prank(_renouncer);
     minterRateLimiter.renounceRole(DEFAULT_ADMIN_ROLE, _renouncer);
     assertEq(minterRateLimiter.hasRole(DEFAULT_ADMIN_ROLE, _renouncer), false);
+  }
+}
+
+contract Pause is ZkMinterRateLimiterV1Test {
+  function testFuzz_PauserCanPauseMinting(address _pauser) public {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(PAUSER_ROLE, _pauser);
+
+    vm.prank(_pauser);
+    minterRateLimiter.pause();
+    assertEq(minterRateLimiter.paused(), true);
+  }
+
+  function testFuzz_RevertIf_CalledByNonPauser(address _nonPauser) public {
+    vm.assume(_nonPauser != admin);
+    vm.prank(_nonPauser);
+    vm.expectRevert(_formatAccessControlError(_nonPauser, PAUSER_ROLE));
+    minterRateLimiter.pause();
+  }
+}
+
+contract Unpause is ZkMinterRateLimiterV1Test {
+  function testFuzz_PauserCanUnpauseMinting(address _pauser) public {
+    vm.prank(admin);
+    minterRateLimiter.grantRole(PAUSER_ROLE, _pauser);
+    vm.prank(admin);
+    minterRateLimiter.pause();
+
+    vm.prank(_pauser);
+    minterRateLimiter.unpause();
+    assertEq(minterRateLimiter.paused(), false);
+  }
+
+  function testFuzz_RevertIf_CalledByNonPauser(address _nonPauser) public {
+    vm.assume(_nonPauser != admin);
+    vm.prank(admin);
+    minterRateLimiter.pause();
+
+    vm.prank(_nonPauser);
+    vm.expectRevert(_formatAccessControlError(_nonPauser, PAUSER_ROLE));
+    minterRateLimiter.unpause();
   }
 }
 
