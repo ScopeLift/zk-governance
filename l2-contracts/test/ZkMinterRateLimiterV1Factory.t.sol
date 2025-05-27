@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {ZkTokenTest} from "test/utils/ZkTokenTest.sol";
+import {Test} from "forge-std/Test.sol";
 import {ZkMinterRateLimiterV1Factory} from "src/ZkMinterRateLimiterV1Factory.sol";
 import {ZkMinterRateLimiterV1} from "src/ZkMinterRateLimiterV1.sol";
 import {IMintable} from "src/interfaces/IMintable.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
-contract ZkMinterRateLimiterV1FactoryTest is ZkTokenTest {
+contract ZkMinterRateLimiterV1FactoryTest is Test {
   bytes32 bytecodeHash;
   ZkMinterRateLimiterV1Factory factory;
 
   error HashIsNonZero(bytes32 _hash);
 
-  function setUp() public virtual override {
-    super.setUp();
-
+  function setUp() public virtual {
     // Read the bytecode hash from the JSON file
     string memory root = vm.projectRoot();
     string memory path = string.concat(root, "/zkout/ZkMinterRateLimiterV1.sol/ZkMinterRateLimiterV1.json");
@@ -29,8 +27,8 @@ contract ZkMinterRateLimiterV1FactoryTest is ZkTokenTest {
     vm.assume(_addr != address(0) && _addr != address(factory));
   }
 
-  function _boundToReasonableRateLimit(uint256 _rateLimit) internal view returns (uint256) {
-    return bound(_rateLimit, 1, MAX_MINT_SUPPLY);
+  function _boundToValidRateLimit(uint256 _rateLimit) internal pure returns (uint256) {
+    return bound(_rateLimit, 1, type(uint256).max);
   }
 
   function _boundToValidTimeWindow(uint48 _timeWindow) internal pure returns (uint48) {
@@ -48,7 +46,7 @@ contract CreateMinterRateLimiter is ZkMinterRateLimiterV1FactoryTest {
   ) public {
     _assumeValidAddress(address(_mintable));
     _assumeValidAddress(_minterAdmin);
-    _mintRateLimit = _boundToReasonableRateLimit(_mintRateLimit);
+    _mintRateLimit = _boundToValidRateLimit(_mintRateLimit);
     _mintRateLimitWindow = _boundToValidTimeWindow(_mintRateLimitWindow);
 
     address minterAddress =
@@ -56,7 +54,7 @@ contract CreateMinterRateLimiter is ZkMinterRateLimiterV1FactoryTest {
 
     ZkMinterRateLimiterV1 minter = ZkMinterRateLimiterV1(minterAddress);
     assertEq(address(minter.mintable()), address(_mintable));
-    assertEq(minter.hasRole(DEFAULT_ADMIN_ROLE, _minterAdmin), true);
+    assertEq(minter.hasRole(minter.DEFAULT_ADMIN_ROLE(), _minterAdmin), true);
     assertEq(minter.mintRateLimit(), _mintRateLimit);
     assertEq(minter.mintRateLimitWindow(), _mintRateLimitWindow);
   }
@@ -70,7 +68,7 @@ contract CreateMinterRateLimiter is ZkMinterRateLimiterV1FactoryTest {
   ) public {
     _assumeValidAddress(address(_mintable));
     _assumeValidAddress(_minterAdmin);
-    _mintRateLimit = _boundToReasonableRateLimit(_mintRateLimit);
+    _mintRateLimit = _boundToValidRateLimit(_mintRateLimit);
     _mintRateLimitWindow = _boundToValidTimeWindow(_mintRateLimitWindow);
 
     vm.expectEmit();
@@ -94,7 +92,7 @@ contract CreateMinterRateLimiter is ZkMinterRateLimiterV1FactoryTest {
   ) public {
     _assumeValidAddress(address(_mintable));
     _assumeValidAddress(_minterAdmin);
-    _mintRateLimit = _boundToReasonableRateLimit(_mintRateLimit);
+    _mintRateLimit = _boundToValidRateLimit(_mintRateLimit);
     _mintRateLimitWindow = _boundToValidTimeWindow(_mintRateLimitWindow);
 
     factory.createMinterRateLimiter(_mintable, _minterAdmin, _mintRateLimit, _mintRateLimitWindow, _saltNonce);
@@ -114,7 +112,7 @@ contract GetMinter is ZkMinterRateLimiterV1FactoryTest {
   ) public {
     _assumeValidAddress(address(_mintable));
     _assumeValidAddress(_minterAdmin);
-    _mintRateLimit = _boundToReasonableRateLimit(_mintRateLimit);
+    _mintRateLimit = _boundToValidRateLimit(_mintRateLimit);
     _mintRateLimitWindow = _boundToValidTimeWindow(_mintRateLimitWindow);
 
     address expectedMinterAddress =
@@ -135,7 +133,7 @@ contract GetMinter is ZkMinterRateLimiterV1FactoryTest {
   ) public {
     _assumeValidAddress(address(_mintable));
     _assumeValidAddress(_minterAdmin);
-    _mintRateLimit = _boundToReasonableRateLimit(_mintRateLimit);
+    _mintRateLimit = _boundToValidRateLimit(_mintRateLimit);
     _mintRateLimitWindow = _boundToValidTimeWindow(_mintRateLimitWindow);
 
     address expectedMinterAddress =
