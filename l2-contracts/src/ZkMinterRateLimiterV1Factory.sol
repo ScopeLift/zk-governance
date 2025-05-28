@@ -7,19 +7,24 @@ import {IMintable} from "src/interfaces/IMintable.sol";
 
 /// @title ZkMinterRateLimiterV1Factory
 /// @author [ScopeLift](https://scopelift.co)
-/// @notice Factory contract to deploy ZkMinterRateLimiterV1 contracts using CREATE2.
+/// @notice Factory contract to deploy `ZkMinterRateLimiterV1` contracts using CREATE2.
 /// @custom:security-contact security@matterlabs.dev
 contract ZkMinterRateLimiterV1Factory {
   /// @dev Bytecode hash should be updated with the correct value from
   /// ./zkout/ZkMinterRateLimiterV1.sol/ZkMinterRateLimiterV1.json.
   bytes32 public immutable BYTECODE_HASH;
 
+  /// @notice Error thrown when attempting to create a minter rate limiter with a zero address admin.
+  error ZkMinterRateLimiterV1Factory__InvalidAdminAddress();
+
+  /// @notice Initializes the factory with the bytecode hash of the ZkMinterRateLimiterV1 contract.
+  /// @param _bytecodeHash The bytecode hash of the ZkMinterRateLimiterV1 contract to be used for CREATE2 deployments.
   constructor(bytes32 _bytecodeHash) {
     BYTECODE_HASH = _bytecodeHash;
   }
 
-  /// @notice Emitted when a new ZkMinterRateLimiterV1 is created.
-  /// @param minterRateLimiter The address of the newly deployed ZkMinterRateLimiterV1.
+  /// @notice Emitted when a new `ZkMinterRateLimiterV1` is created.
+  /// @param minterRateLimiter The address of the newly deployed `ZkMinterRateLimiterV1`.
   /// @param mintable A contract used as a target when calling mint.
   /// @param admin The address that will have admin privileges.
   /// @param mintRateLimit The maximum number of tokens that may be minted within the rate limit window.
@@ -32,13 +37,13 @@ contract ZkMinterRateLimiterV1Factory {
     uint48 mintRateLimitWindow
   );
 
-  /// @notice Deploys a new ZkMinterRateLimiterV1 contract using CREATE2.
+  /// @notice Deploys a new `ZkMinterRateLimiterV1` contract using CREATE2.
   /// @param _mintable A contract used as a target when calling mint.
   /// @param _admin The address that will have admin privileges.
   /// @param _mintRateLimit The maximum number of tokens that may be minted within the rate limit window.
   /// @param _mintRateLimitWindow The duration in seconds of the rate limit window.
   /// @param _saltNonce A user-provided nonce for salt calculation.
-  /// @return _minterRateLimiterAddress The address of the newly deployed ZkMinterRateLimiterV1.
+  /// @return _minterRateLimiterAddress The address of the newly deployed `ZkMinterRateLimiterV1`.
   function createMinterRateLimiter(
     IMintable _mintable,
     address _admin,
@@ -46,10 +51,9 @@ contract ZkMinterRateLimiterV1Factory {
     uint48 _mintRateLimitWindow,
     uint256 _saltNonce
   ) external returns (address _minterRateLimiterAddress) {
-    require(address(_mintable) != address(0), "Mintable cannot be zero address");
-    require(_admin != address(0), "Admin cannot be zero address");
-    require(_mintRateLimit > 0, "Mint rate limit must be greater than 0");
-    require(_mintRateLimitWindow > 0, "Mint rate limit window must be greater than 0");
+    if (_admin == address(0)) {
+      revert ZkMinterRateLimiterV1Factory__InvalidAdminAddress();
+    }
 
     bytes memory saltArgs = abi.encode(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow);
     bytes32 _salt = _calculateSalt(saltArgs, _saltNonce);
@@ -61,13 +65,13 @@ contract ZkMinterRateLimiterV1Factory {
     emit MinterRateLimiterCreated(_minterRateLimiterAddress, _mintable, _admin, _mintRateLimit, _mintRateLimitWindow);
   }
 
-  /// @notice Computes the address of a ZkMinterRateLimiterV1 deployed via this factory.
+  /// @notice Computes the address of a `ZkMinterRateLimiterV1` deployed via this factory.
   /// @param _mintable A contract used as a target when calling mint.
   /// @param _admin The address that will have admin privileges.
   /// @param _mintRateLimit The maximum number of tokens that may be minted within the rate limit window.
   /// @param _mintRateLimitWindow The duration in seconds of the rate limit window.
   /// @param _saltNonce The nonce used for salt calculation.
-  /// @return _minterRateLimiterAddress The address of the ZkMinterRateLimiterV1.
+  /// @return _minterRateLimiterAddress The address of the `ZkMinterRateLimiterV1`.
   function getMinter(
     IMintable _mintable,
     address _admin,
