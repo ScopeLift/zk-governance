@@ -13,6 +13,8 @@ contract ZkCappedMinterFactoryTest is ZkTokenTest {
   bytes32 bytecodeHash;
   ZkCappedMinterFactory factory;
 
+  error HashIsNonZero(bytes32 _hash);
+
   function setUp() public virtual override {
     super.setUp();
 
@@ -71,7 +73,7 @@ contract CreateCappedMinter is ZkCappedMinterFactoryTest {
 
     factory.createCappedMinter(IMintableAndDelegatable(address(token)), _cappedMinterAdmin, _cap, _saltNonce);
 
-    vm.expectRevert("Code hash is non-zero");
+    vm.expectRevert(abi.encodeWithSelector(HashIsNonZero.selector, bytecodeHash));
     factory.createCappedMinter(IMintableAndDelegatable(address(token)), _cappedMinterAdmin, _cap, _saltNonce);
   }
 }
