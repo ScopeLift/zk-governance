@@ -6,12 +6,11 @@ import {ZkMinterRateLimiterV1Factory} from "src/ZkMinterRateLimiterV1Factory.sol
 import {ZkMinterRateLimiterV1} from "src/ZkMinterRateLimiterV1.sol";
 import {IMintable} from "src/interfaces/IMintable.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+import {HashIsNonZero} from "era-contracts/system-contracts/contracts/SystemContractErrors.sol";
 
 contract ZkMinterRateLimiterV1FactoryTest is Test {
   bytes32 bytecodeHash;
   ZkMinterRateLimiterV1Factory factory;
-
-  error HashIsNonZero(bytes32 _hash);
 
   function setUp() public virtual {
     // Read the bytecode hash from the JSON file

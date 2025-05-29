@@ -8,12 +8,11 @@ import {IMintable} from "src/interfaces/IMintable.sol";
 import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
 import {console2} from "forge-std/console2.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+import {HashIsNonZero} from "era-contracts/system-contracts/contracts/SystemContractErrors.sol";
 
 contract ZkCappedMinterV2FactoryTest is ZkTokenTest {
   bytes32 bytecodeHash;
   ZkCappedMinterV2Factory factory;
-
-  error HashIsNonZero(bytes32 _hash);
 
   function setUp() public virtual override {
     super.setUp();
