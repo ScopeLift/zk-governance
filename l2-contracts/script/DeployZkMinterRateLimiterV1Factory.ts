@@ -1,6 +1,6 @@
 import { config as dotEnvConfig } from "dotenv";
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
-import { Wallet } from "zksync-ethers";
+import { Wallet, utils } from "zksync-ethers";
 import * as hre from "hardhat";
 import * as fs from "fs";
 import * as path from "path";
@@ -9,12 +9,14 @@ import * as path from "path";
 // Verify the zksolc version used to compile the contract, the hash changes with different versions
 const zkMinterRateLimiterFactoryPath = path.join(
   __dirname,
-  "../zkout/ZkMinterRateLimiterV1Factory.sol/ZkMinterRateLimiterV1Factory.json"
+  "../artifacts-zk/src/ZkMinterRateLimiterV1.sol/ZkMinterRateLimiterV1.json"
 );
 const zkMinterRateLimiterFactoryJson = JSON.parse(
   fs.readFileSync(zkMinterRateLimiterFactoryPath, "utf8")
 );
-const BYTECODE_HASH = "0x" + zkMinterRateLimiterFactoryJson.hash;
+const BYTECODE_HASH = utils.hashBytecode(
+  zkMinterRateLimiterFactoryJson.bytecode
+);
 
 async function main() {
   dotEnvConfig();
