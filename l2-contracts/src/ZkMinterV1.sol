@@ -5,6 +5,10 @@ import {IMintable} from "src/interfaces/IMintable.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 
+/// @title ZkMinterV1
+/// @author [ScopeLift](https://scopelift.co)
+/// @notice A base contract with the shared functionality for all ZK Minters.
+/// @custom:security-contact security@matterlabs.dev
 abstract contract ZkMinterV1 is IMintable, AccessControl, Pausable {
   /// @notice A contract used as a target when calling mint.
   /// @dev Any contract that conforms to the IMintable interface can be used, but in most cases this will be another

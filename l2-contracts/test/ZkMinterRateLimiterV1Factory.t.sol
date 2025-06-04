@@ -108,8 +108,6 @@ contract CreateMinterRateLimiter is ZkMinterRateLimiterV1FactoryTest {
     factory.createMinter(_mintable, abi.encode(_minterAdmin, _mintRateLimit, _mintRateLimitWindow, _saltNonce));
   }
 
-
-
   function testFuzz_RevertIf_CreatingDuplicateMinter(
     IMintable _mintable,
     address _minterAdmin,

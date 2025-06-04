@@ -52,11 +52,14 @@ contract ZkMinterRateLimiterV1Factory is IZkMinterV1Factory {
     uint48 _mintRateLimitWindow,
     uint256 _saltNonce
   ) external returns (address _minterRateLimiterAddress) {
-	  _minterRateLimiterAddress = _createMinter(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow, _saltNonce);	
+    _minterRateLimiterAddress = _createMinter(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow, _saltNonce);
   }
-  /// @notice Deploys a new `ZkMinterRateLimiterV1` contract using CREATE2.
+  /// @notice Deploys a new `ZkMinterRateLimiterV1` contract using CREATE2. This method takes bytes argument
+  /// and is meant to be used in a unified factory for all capped minter extensions.
   /// @param _mintable A contract used as a target when calling mint.
   /// @param _args The args to deploy ZkMinterRateLimiterV1.
+  /// @return The address of the newly deployed `ZkMinterRateLimiterV1`.
+
   function createMinter(IMintable _mintable, bytes memory _args) external returns (address) {
     (address _admin, uint256 _mintRateLimit, uint48 _mintRateLimitWindow, uint256 _saltNonce) =
       abi.decode(_args, (address, uint256, uint48, uint256));
@@ -92,6 +95,13 @@ contract ZkMinterRateLimiterV1Factory is IZkMinterV1Factory {
     return keccak256(abi.encode(_args, block.chainid, _saltNonce));
   }
 
+  /// @notice Deploys a new `ZkMinterRateLimiterV1` contract using CREATE2.
+  /// @param _mintable A contract used as a target when calling mint.
+  /// @param _admin The address that will have admin privileges.
+  /// @param _mintRateLimit The maximum number of tokens that may be minted within the rate limit window.
+  /// @param _mintRateLimitWindow The duration in seconds of the rate limit window.
+  /// @param _saltNonce A user-provided nonce for salt calculation.
+  /// @return _minterRateLimiterAddress The address of the newly deployed `ZkMinterRateLimiterV1`.
   function _createMinter(
     IMintable _mintable,
     address _admin,

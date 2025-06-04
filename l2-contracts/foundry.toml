@@ -1,7 +1,7 @@
 [profile.default]
   evm_version = "paris"
   fs_permissions = [{ access = "read", path = "./zkout" }]
-  fuzz = { runs = 5 }
+  fuzz = { runs = 50 }
   optimizer = true
   optimizer_runs = 10_000_000
   remappings = [
