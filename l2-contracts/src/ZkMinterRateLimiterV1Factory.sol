@@ -54,12 +54,12 @@ contract ZkMinterRateLimiterV1Factory is IZkMinterV1Factory {
   ) external returns (address _minterRateLimiterAddress) {
     _minterRateLimiterAddress = _createMinter(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow, _saltNonce);
   }
+
   /// @notice Deploys a new `ZkMinterRateLimiterV1` contract using CREATE2. This method takes bytes argument
   /// and is meant to be used in a unified factory for all capped minter extensions.
   /// @param _mintable A contract used as a target when calling mint.
   /// @param _args The args to deploy ZkMinterRateLimiterV1.
   /// @return The address of the newly deployed `ZkMinterRateLimiterV1`.
-
   function createMinter(IMintable _mintable, bytes memory _args) external returns (address) {
     (address _admin, uint256 _mintRateLimit, uint48 _mintRateLimitWindow, uint256 _saltNonce) =
       abi.decode(_args, (address, uint256, uint48, uint256));
