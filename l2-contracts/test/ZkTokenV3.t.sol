@@ -16,7 +16,6 @@ contract ZkTokenV3Test is Test {
     tokenV3 = new ZkTokenV3();
     tokenV3.initialize(admin, admin, INITIAL_MINT_AMOUNT);
     tokenV3.initializeV2();
-    tokenV3.initializeV3();
   }
 
   function _mint(address _to, uint256 _amount) internal {
@@ -38,7 +37,7 @@ contract ZkTokenV3Test is Test {
   }
 }
 
-contract InitializeV3 is ZkTokenV3Test {
+contract Initialize is ZkTokenV3Test {
   function calculateDomainSeparator(address _token) public view returns (bytes32) {
     return keccak256(
       abi.encode(
@@ -62,7 +61,7 @@ contract InitializeV3 is ZkTokenV3Test {
 
   function testFuzz_RevertIf_TheInitializerV3IsCalledTwice() public {
     vm.expectRevert("Initializable: contract is already initialized");
-    tokenV3.initializeV3();
+    tokenV3.initializeV2();
   }
 }
 
@@ -125,9 +124,6 @@ contract BurnFrom is ZkTokenV3Test {
     _mint(_from, _initialBalance);
     uint256 _initialSupply = tokenV3.totalSupply();
 
-    vm.prank(_from);
-    tokenV3.approve(_caller, _burnAmount);
-
     vm.prank(_caller);
     tokenV3.burnFrom(_from, _burnAmount);
 
@@ -147,33 +143,7 @@ contract BurnFrom is ZkTokenV3Test {
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
     _mint(_from, _initialBalance);
 
-    vm.prank(_from);
-    tokenV3.approve(_caller, _burnAmount);
-
     vm.expectRevert(_formatAccessControlError(_caller, BURNER_ROLE));
-    vm.prank(_caller);
-    tokenV3.burnFrom(_from, _burnAmount);
-  }
-
-  function testFuzz_RevertIf_CallerDoesNotHaveEnoughAllowance(
-    uint256 _initialBalance,
-    uint256 _burnAmount,
-    uint256 _allowance,
-    address _caller,
-    address _from
-  ) public {
-    vm.assume(_caller != address(0) && _caller != admin);
-    vm.assume(_from != address(0) && _from != admin);
-    _grantBurnerRole(_caller);
-    _initialBalance = bound(_initialBalance, 1, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
-    _burnAmount = bound(_burnAmount, 1, _initialBalance);
-    _allowance = bound(_allowance, 0, _burnAmount - 1);
-    _mint(_from, _initialBalance);
-
-    vm.prank(_from);
-    tokenV3.approve(_caller, _allowance);
-
-    vm.expectRevert("ERC20: insufficient allowance");
     vm.prank(_caller);
     tokenV3.burnFrom(_from, _burnAmount);
   }
