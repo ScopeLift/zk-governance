@@ -40,6 +40,7 @@ contract Constructor is ZkMinterRateLimiterV1Test {
     uint256 _mintRateLimit,
     uint48 _mintRateLimitWindow
   ) public {
+    vm.assume(_admin != address(0));
     ZkMinterRateLimiterV1 _minterRateLimiter =
       new ZkMinterRateLimiterV1(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow);
 
@@ -47,6 +48,15 @@ contract Constructor is ZkMinterRateLimiterV1Test {
     assertTrue(_minterRateLimiter.hasRole(_minterRateLimiter.DEFAULT_ADMIN_ROLE(), _admin));
     assertEq(_minterRateLimiter.mintRateLimit(), _mintRateLimit);
     assertEq(_minterRateLimiter.mintRateLimitWindow(), _mintRateLimitWindow);
+  }
+
+  function testFuzz_RevertIf_AdminIsZeroAddress(
+    IMintable _mintable,
+    uint256 _mintRateLimit,
+    uint48 _mintRateLimitWindow
+  ) public {
+    vm.expectRevert(ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__InvalidAdmin.selector);
+    new ZkMinterRateLimiterV1(_mintable, address(0), _mintRateLimit, _mintRateLimitWindow);
   }
 }
 
