@@ -34,6 +34,9 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
   /// @notice Error for when the rate limit is exceeded.
   error ZkMinterRateLimiterV1__MintRateLimitExceeded(address minter, uint256 amount);
 
+  /// @notice Error for when the mint rate limit window is zero.
+  error ZkMinterRateLimiterV1__InvalidMintRateLimitWindow();
+
   /// @notice Error for when the admin is the zero address.
   error ZkMinterRateLimiterV1__InvalidAdmin();
 
@@ -69,7 +72,8 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
 
     // Roll forward to new window if needed
     if (block.timestamp >= currentMintWindowStart + mintRateLimitWindow) {
-      currentMintWindowStart = uint48(block.timestamp);
+      uint48 windowsPassed = uint48(block.timestamp - currentMintWindowStart) / mintRateLimitWindow;
+      currentMintWindowStart += windowsPassed * mintRateLimitWindow;
       currentMintWindowMinted = 0;
     }
     _revertIfRateLimitPerMintWindowExceeded(_amount);
@@ -91,6 +95,9 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
   /// @param _mintRateLimitWindow The new duration of the rate limit window in seconds.
   /// @dev Only callable by addresses with the DEFAULT_ADMIN_ROLE.
   function updateMintRateLimitWindow(uint48 _mintRateLimitWindow) external {
+    if (_mintRateLimitWindow == 0) {
+      revert ZkMinterRateLimiterV1__InvalidMintRateLimitWindow();
+    }
     _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     _updateMintRateLimitWindow(_mintRateLimitWindow);
 
