@@ -3,8 +3,6 @@ pragma solidity 0.8.24;
 
 import {IMintable} from "src/interfaces/IMintable.sol";
 import {ZkMinterV1} from "src/ZkMinterV1.sol";
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 
 /// @title ZkMinterRateLimiterV1
 /// @author [ScopeLift](https://scopelift.co)
@@ -12,14 +10,17 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 /// up to a specified amount within a configurable time period.
 /// @custom:security-contact security@matterlabs.dev
 contract ZkMinterRateLimiterV1 is ZkMinterV1 {
-  /// @notice The number of tokens minted in each mint window.
-  mapping(uint48 mintWindowStart => uint256 mintedAmount) public mintedInWindow;
-
   /// @notice The maximum number of tokens that may be minted by the minter in a single mint rate limit window.
   uint256 public mintRateLimit;
 
   /// @notice The number of seconds in a mint rate limit window.
   uint48 public mintRateLimitWindow;
+
+  /// @notice The timestamp marking the start of the current mint window.
+  uint48 public currentMintWindowStart;
+
+  /// @notice The number of tokens minted in the current mint window.
+  uint256 public currentMintWindowMinted;
 
   /// @notice The timestamp when minting can begin.
   uint48 public immutable START_TIME;
@@ -65,10 +66,15 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
     _revertIfClosed();
     _requireNotPaused();
     _checkRole(MINTER_ROLE, msg.sender);
-    uint48 _currentMintWindowStart = currentMintWindowStart();
-    _revertIfRateLimitPerMintWindowExceeded(_currentMintWindowStart, _amount);
 
-    mintedInWindow[_currentMintWindowStart] += _amount;
+    // Roll forward to new window if needed
+    if (block.timestamp >= currentMintWindowStart + mintRateLimitWindow) {
+      currentMintWindowStart = uint48(block.timestamp);
+      currentMintWindowMinted = 0;
+    }
+    _revertIfRateLimitPerMintWindowExceeded(_amount);
+
+    currentMintWindowMinted += _amount;
     mintable.mint(_to, _amount);
     emit Minted(msg.sender, _to, _amount);
   }
@@ -87,12 +93,9 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
   function updateMintRateLimitWindow(uint48 _mintRateLimitWindow) external {
     _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     _updateMintRateLimitWindow(_mintRateLimitWindow);
-  }
 
-  /// @notice Calculates the start timestamp of the current mint window.
-  /// @return The timestamp marking the start of the current mint window.
-  function currentMintWindowStart() public view returns (uint48) {
-    return uint48(block.timestamp - ((block.timestamp - START_TIME) % mintRateLimitWindow));
+    currentMintWindowStart = uint48(block.timestamp);
+    currentMintWindowMinted = 0;
   }
 
   /// @notice Updates the maximum number of tokens that can be minted during the rate limit window.
@@ -109,18 +112,10 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
     mintRateLimitWindow = _mintRateLimitWindow;
   }
 
-  /// @notice Calculates how many tokens are still available to mint in a given window.
-  /// @param _windowStart The timestamp marking the start of the window.
-  /// @return The number of tokens that can still be minted in the given window.
-  function _remainingMintAllowance(uint48 _windowStart) internal view returns (uint256) {
-    return mintRateLimit - mintedInWindow[_windowStart];
-  }
-
   /// @notice Reverts if the rate limit is exceeded.
-  /// @param _windowStart The timestamp marking the start of the window.
   /// @param _amount The amount of tokens that will be minted.
-  function _revertIfRateLimitPerMintWindowExceeded(uint48 _windowStart, uint256 _amount) internal view {
-    if (_amount > _remainingMintAllowance(_windowStart)) {
+  function _revertIfRateLimitPerMintWindowExceeded(uint256 _amount) internal view {
+    if (currentMintWindowMinted + _amount > mintRateLimit) {
       revert ZkMinterRateLimiterV1__MintRateLimitExceeded(msg.sender, _amount);
     }
   }

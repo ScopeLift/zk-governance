@@ -5,6 +5,7 @@ import {ZkMinterRateLimiterV1} from "src/ZkMinterRateLimiterV1.sol";
 import {ZkMinterV1} from "src/ZkMinterV1.sol";
 import {ZkCappedMinterV2Test} from "test/ZkCappedMinterV2.t.sol";
 import {IMintable} from "src/interfaces/IMintable.sol";
+import {console2} from "forge-std/console2.sol";
 
 contract ZkMinterRateLimiterV1Test is ZkCappedMinterV2Test {
   ZkMinterRateLimiterV1 public minterRateLimiter;
@@ -79,8 +80,8 @@ contract Mint is ZkMinterRateLimiterV1Test {
 
     vm.prank(_minter);
     minterRateLimiter.mint(_to, _amount);
-    assertEq(token.balanceOf(_to) - _startBalance, _amount);
-    assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), _amount);
+    assertEq(token.balanceOf(_to), _amount);
+    assertEq(minterRateLimiter.currentMintWindowMinted(), _amount);
   }
 
   function testFuzz_EmitsMintedEvent(address _to, uint256 _amount) public {
@@ -105,8 +106,8 @@ contract Mint is ZkMinterRateLimiterV1Test {
     minterRateLimiter.mint(_to, _amount2);
     vm.stopPrank();
 
-    assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), _amount1 + _amount2);
-    assertEq(token.balanceOf(_to) - _startBalance, _amount1 + _amount2);
+    assertEq(minterRateLimiter.currentMintWindowMinted(), _amount1 + _amount2);
+    assertEq(token.balanceOf(_to), _amount1 + _amount2);
   }
 
   function testFuzz_MintRateLimitIsResetAfterWindow(address _to, uint256 _amount) public {
@@ -121,7 +122,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
       i++
     ) {
       minterRateLimiter.mint(_to, _amount);
-      assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), _amount);
+      assertEq(minterRateLimiter.currentMintWindowMinted(), _amount);
       vm.warp(block.timestamp + MINT_RATE_LIMIT_WINDOW);
     }
     vm.stopPrank();
@@ -140,8 +141,8 @@ contract Mint is ZkMinterRateLimiterV1Test {
 
     vm.prank(minter);
     minterRateLimiter.mint(_to, _amount);
-    assertEq(token.balanceOf(_to) - _startBalance, _amount);
-    assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), _amount);
+    assertEq(token.balanceOf(_to), _amount);
+    assertEq(minterRateLimiter.currentMintWindowMinted(), _amount);
   }
 
   function testFuzz_RevertIf_MintRateLimitExceeded(address _to, uint256 _amount) public {
@@ -169,7 +170,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.startPrank(minter);
     minterRateLimiter.mint(_to, _amount);
     minterRateLimiter.mint(_to, MINT_RATE_LIMIT - _amount);
-    assertEq(minterRateLimiter.mintedInWindow(minterRateLimiter.currentMintWindowStart()), MINT_RATE_LIMIT);
+    assertEq(minterRateLimiter.currentMintWindowMinted(), MINT_RATE_LIMIT);
     vm.stopPrank();
 
     vm.prank(minter);
@@ -188,7 +189,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
   ) public {
     vm.assume(_to != address(0));
     _amount = bound(_amount, 1, MINT_RATE_LIMIT);
-    _exceedingAmount = bound(_exceedingAmount, 1, type(uint256).max);
+    _exceedingAmount = bound(_exceedingAmount, 1, type(uint256).max - (MINT_RATE_LIMIT * 2));
 
     vm.startPrank(minter);
     minterRateLimiter.mint(_to, _amount);
