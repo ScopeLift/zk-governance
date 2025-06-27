@@ -286,6 +286,7 @@ contract UpdateMintRateLimitWindow is ZkMinterRateLimiterV1Test {
   }
 
   function test_RevertIf_MintRateLimitWindowIsZero() public {
+    vm.prank(admin);
     vm.expectRevert(ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__InvalidMintRateLimitWindow.selector);
     minterRateLimiter.updateMintRateLimitWindow(0);
   }

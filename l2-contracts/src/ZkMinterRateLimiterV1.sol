@@ -54,10 +54,6 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
 
     _updateMintable(_mintable);
     _updateMintRateLimit(_mintRateLimit);
-
-    if (_mintRateLimitWindow == 0) {
-      revert ZkMinterRateLimiterV1__InvalidMintRateLimitWindow();
-    }
     _updateMintRateLimitWindow(_mintRateLimitWindow);
 
     START_TIME = uint48(block.timestamp);
@@ -98,12 +94,10 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
   /// @notice Updates the duration of the rate limit window in seconds.
   /// @param _mintRateLimitWindow The new duration of the rate limit window in seconds.
   /// @dev Only callable by addresses with the DEFAULT_ADMIN_ROLE.
+  /// @dev The mint rate limit window cannot be set to 0.
   /// @dev This function also resets `currentMintWindowMinted` to 0. Tokens minted in the current window are
   /// disregarded, allowing immediate minting up to the new limit, especially when the window duration is reduced.
   function updateMintRateLimitWindow(uint48 _mintRateLimitWindow) external {
-    if (_mintRateLimitWindow == 0) {
-      revert ZkMinterRateLimiterV1__InvalidMintRateLimitWindow();
-    }
     _checkRole(DEFAULT_ADMIN_ROLE, msg.sender);
     _updateMintRateLimitWindow(_mintRateLimitWindow);
 
@@ -121,6 +115,9 @@ contract ZkMinterRateLimiterV1 is ZkMinterV1 {
   /// @notice Updates the duration of the rate limit window in seconds.
   /// @param _mintRateLimitWindow The new duration of the rate limit window in seconds.
   function _updateMintRateLimitWindow(uint48 _mintRateLimitWindow) internal {
+    if (_mintRateLimitWindow == 0) {
+      revert ZkMinterRateLimiterV1__InvalidMintRateLimitWindow();
+    }
     emit MintRateLimitWindowUpdated(mintRateLimitWindow, _mintRateLimitWindow);
     mintRateLimitWindow = _mintRateLimitWindow;
   }
