@@ -42,6 +42,7 @@ contract Constructor is ZkMinterRateLimiterV1Test {
     uint48 _mintRateLimitWindow
   ) public {
     vm.assume(_admin != address(0));
+    vm.assume(_mintRateLimitWindow != 0);
     ZkMinterRateLimiterV1 _minterRateLimiter =
       new ZkMinterRateLimiterV1(_mintable, _admin, _mintRateLimit, _mintRateLimitWindow);
 
