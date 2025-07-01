@@ -73,7 +73,16 @@ contract Initialize is ZkTokenV3Test {
     assertEq(tokenV3Implementation.balanceOf(initMintReceiver), INITIAL_MINT_AMOUNT);
   }
 
-  function testFuzz_RevertIf_TheInitializerV3IsCalledTwice() public {
+  function testFuzz_RevertIf_TheInitializerIsCalledTwice(
+    address _admin,
+    address _initMintReceiver,
+    uint256 _initialMintAmount
+  ) public {
+    vm.expectRevert("Initializable: contract is already initialized");
+    tokenV3Implementation.initialize(_admin, _initMintReceiver, _initialMintAmount);
+  }
+
+  function testFuzz_RevertIf_TheInitializerV2IsCalledTwice() public {
     vm.expectRevert("Initializable: contract is already initialized");
     tokenV3Implementation.initializeV2();
   }
