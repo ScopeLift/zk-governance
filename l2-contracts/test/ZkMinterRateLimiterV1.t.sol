@@ -77,8 +77,6 @@ contract Mint is ZkMinterRateLimiterV1Test {
     _amount = bound(_amount, 1, MINT_RATE_LIMIT);
     _grantRateLimiterMinterRole(_minter);
 
-    uint256 _startBalance = token.balanceOf(_to);
-
     vm.prank(_minter);
     minterRateLimiter.mint(_to, _amount);
     assertEq(token.balanceOf(_to), _amount);
@@ -99,8 +97,6 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.assume(_to != address(0));
     _amount1 = bound(_amount1, 1, MINT_RATE_LIMIT);
     _amount2 = bound(_amount2, 0, MINT_RATE_LIMIT - _amount1);
-
-    uint256 _startBalance = token.balanceOf(_to);
 
     vm.startPrank(minter);
     minterRateLimiter.mint(_to, _amount1);
@@ -137,8 +133,6 @@ contract Mint is ZkMinterRateLimiterV1Test {
     minterRateLimiter.pause();
     minterRateLimiter.unpause();
     vm.stopPrank();
-
-    uint256 _startBalance = token.balanceOf(_to);
 
     vm.prank(minter);
     minterRateLimiter.mint(_to, _amount);
