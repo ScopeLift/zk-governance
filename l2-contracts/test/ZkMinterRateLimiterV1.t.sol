@@ -76,10 +76,11 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.assume(_to != address(0));
     _amount = bound(_amount, 1, MINT_RATE_LIMIT);
     _grantRateLimiterMinterRole(_minter);
+    uint256 _startBalance = token.balanceOf(_to);
 
     vm.prank(_minter);
     minterRateLimiter.mint(_to, _amount);
-    assertEq(token.balanceOf(_to), _amount);
+    assertEq(token.balanceOf(_to) - _startBalance, _amount);
     assertEq(minterRateLimiter.currentMintWindowMinted(), _amount);
   }
 
@@ -97,6 +98,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.assume(_to != address(0));
     _amount1 = bound(_amount1, 1, MINT_RATE_LIMIT);
     _amount2 = bound(_amount2, 0, MINT_RATE_LIMIT - _amount1);
+    uint256 _startBalance = token.balanceOf(_to);
 
     vm.startPrank(minter);
     minterRateLimiter.mint(_to, _amount1);
@@ -104,7 +106,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
     vm.stopPrank();
 
     assertEq(minterRateLimiter.currentMintWindowMinted(), _amount1 + _amount2);
-    assertEq(token.balanceOf(_to), _amount1 + _amount2);
+    assertEq(token.balanceOf(_to) - _startBalance, _amount1 + _amount2);
   }
 
   function testFuzz_MintRateLimitIsResetAfterWindow(address _to, uint256 _amount) public {
@@ -128,6 +130,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
   function testFuzz_CanMintAfterUnpause(address _to, uint256 _amount) public {
     vm.assume(_to != address(0));
     _amount = bound(_amount, 1, MINT_RATE_LIMIT);
+    uint256 _startBalance = token.balanceOf(_to);
 
     vm.startPrank(admin);
     minterRateLimiter.pause();
@@ -136,7 +139,7 @@ contract Mint is ZkMinterRateLimiterV1Test {
 
     vm.prank(minter);
     minterRateLimiter.mint(_to, _amount);
-    assertEq(token.balanceOf(_to), _amount);
+    assertEq(token.balanceOf(_to) - _startBalance, _amount);
     assertEq(minterRateLimiter.currentMintWindowMinted(), _amount);
   }
 
