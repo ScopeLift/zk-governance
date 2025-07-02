@@ -150,6 +150,7 @@ contract CreateMinterRateLimiter is ZkMinterRateLimiterV1FactoryTest {
     uint256 _mintRateLimit,
     uint256 _saltNonce
   ) public {
+    vm.assume(_minterAdmin != address(0));
     vm.expectRevert(
       abi.encodeWithSelector(ZkMinterRateLimiterV1.ZkMinterRateLimiterV1__InvalidMintRateLimitWindow.selector)
     );
