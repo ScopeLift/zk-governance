@@ -16,7 +16,10 @@ import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 contract ZkTokenV3Test is Test {
   ZkTokenV3 tokenV3Implementation;
+  ZkTokenV3 tokenV3Proxy;
   address admin = makeAddr("Admin");
+  address proxyAdmin = makeAddr("Proxy Admin");
+  address deployer = makeAddr("Deployer");
   address initMintReceiver = makeAddr("Init Mint Receiver");
 
   address constant ZK_TOKEN_GOVERNOR = 0xb83FF6501214ddF40C91C9565d095400f3F45746;
@@ -24,18 +27,26 @@ contract ZkTokenV3Test is Test {
   address constant ZK_TOKEN_PROXY_ADDRESS = 0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E;
   uint256 constant INITIAL_MINT_AMOUNT = 1_000_000_000e18;
   uint256 constant MAX_SUPPLY = 21_000_000_000e18;
+  bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 constant BURNER_ROLE = keccak256("BURNER_ROLE");
+  address constant TOKEN_V3_PROXY_ADMIN_ADDRESS = 0xDE59D53EE7BDB45E5e31817Cdd87f3B97934e161;
 
   function setUp() public virtual {
     tokenV3Implementation = new ZkTokenV3();
-    tokenV3Implementation.initialize(admin, initMintReceiver, INITIAL_MINT_AMOUNT);
-    tokenV3Implementation.initializeV2();
+
+    vm.startPrank(deployer);
+    bytes memory _initData = abi.encodeCall(ZkTokenV1.initialize, (admin, initMintReceiver, INITIAL_MINT_AMOUNT));
+    TransparentUpgradeableProxy _proxy =
+      new TransparentUpgradeableProxy(address(tokenV3Implementation), proxyAdmin, _initData);
+    vm.stopPrank();
+    tokenV3Proxy = ZkTokenV3(payable(address(_proxy)));
+    tokenV3Proxy.initializeV2();
   }
 
   function _mint(address _to, uint256 _amount) internal {
     vm.startPrank(admin);
-    tokenV3Implementation.grantRole(tokenV3Implementation.MINTER_ROLE(), admin);
-    tokenV3Implementation.mint(_to, _amount);
+    tokenV3Proxy.grantRole(tokenV3Implementation.MINTER_ROLE(), admin);
+    tokenV3Proxy.mint(_to, _amount);
     vm.stopPrank();
   }
 
@@ -65,12 +76,12 @@ contract Initialize is ZkTokenV3Test {
   }
 
   function test_InitializesTheTokenWithTheCorrectConfigurationWhenDeployed() public {
-    assertEq(tokenV3Implementation.symbol(), "ZK");
-    assertEq(tokenV3Implementation.name(), "ZKsync");
-    assertEq(tokenV3Implementation.maxSupply(), 21_000_000_000e18);
-    assertEq(tokenV3Implementation.DOMAIN_SEPARATOR(), calculateDomainSeparator(address(tokenV3Implementation)));
-    assertEq(tokenV3Implementation.totalSupply(), INITIAL_MINT_AMOUNT);
-    assertEq(tokenV3Implementation.balanceOf(initMintReceiver), INITIAL_MINT_AMOUNT);
+    assertEq(tokenV3Proxy.symbol(), "ZK");
+    assertEq(tokenV3Proxy.name(), "ZKsync");
+    assertEq(tokenV3Proxy.maxSupply(), 21_000_000_000e18);
+    assertEq(tokenV3Proxy.DOMAIN_SEPARATOR(), calculateDomainSeparator(address(tokenV3Proxy)));
+    assertEq(tokenV3Proxy.totalSupply(), INITIAL_MINT_AMOUNT);
+    assertEq(tokenV3Proxy.balanceOf(initMintReceiver), INITIAL_MINT_AMOUNT);
   }
 
   function testFuzz_RevertIf_TheInitializerIsCalledTwice(
@@ -85,6 +96,20 @@ contract Initialize is ZkTokenV3Test {
   function testFuzz_RevertIf_TheInitializerV2IsCalledTwice() public {
     vm.expectRevert("Initializable: contract is already initialized");
     tokenV3Implementation.initializeV2();
+  }
+
+  function testFuzz_RevertIf_TheInitializerIsCalledTwiceOnTheProxy(
+    address _admin,
+    address _initMintReceiver,
+    uint256 _initialMintAmount
+  ) public {
+    vm.expectRevert("Initializable: contract is already initialized");
+    tokenV3Proxy.initialize(_admin, _initMintReceiver, _initialMintAmount);
+  }
+
+  function testFuzz_RevertIf_TheInitializerV2IsCalledTwiceOnTheProxy() public {
+    vm.expectRevert("Initializable: contract is already initialized");
+    tokenV3Proxy.initializeV2();
   }
 }
 
@@ -106,19 +131,38 @@ contract CLOCK_MODE is ZkTokenV3Test {
   }
 }
 
+contract Mint is ZkTokenV3Test {
+  function testFuzz_RevertIf_CallerMintsOnTheImplementation(uint256 _mintAmount, address _caller) public {
+    vm.expectRevert(_formatAccessControlError(_caller, MINTER_ROLE));
+    vm.prank(_caller);
+    tokenV3Implementation.mint(_caller, _mintAmount);
+  }
+}
+
 contract Burn is ZkTokenV3Test {
+  function testFuzz_RevertIf_CallerBurnsTokensOnTheImplementationWithoutBalance(uint256 _burnAmount, address _caller)
+    public
+  {
+    vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
+    _burnAmount = bound(_burnAmount, 1, MAX_SUPPLY);
+
+    vm.expectRevert("ERC20: burn amount exceeds balance");
+    vm.prank(_caller);
+    tokenV3Implementation.burn(_burnAmount);
+  }
+
   function testFuzz_CallerCanBurnTokens(uint256 _initialBalance, uint256 _burnAmount, address _caller) public {
-    vm.assume(_caller != address(0) && _caller != admin);
+    vm.assume(_caller != address(0) && _caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
     _mint(_caller, _initialBalance);
-    uint256 _initialSupply = tokenV3Implementation.totalSupply();
+    uint256 _initialSupply = tokenV3Proxy.totalSupply();
 
     vm.prank(_caller);
-    tokenV3Implementation.burn(_burnAmount);
+    tokenV3Proxy.burn(_burnAmount);
 
-    assertEq(tokenV3Implementation.balanceOf(_caller), _initialBalance - _burnAmount);
-    assertEq(tokenV3Implementation.totalSupply(), _initialSupply - _burnAmount);
+    assertEq(tokenV3Proxy.balanceOf(_caller), _initialBalance - _burnAmount);
+    assertEq(tokenV3Proxy.totalSupply(), _initialSupply - _burnAmount);
   }
 
   function testFuzz_RevertIf_CallerDoesNotHaveEnoughBalance(
@@ -126,21 +170,21 @@ contract Burn is ZkTokenV3Test {
     uint256 _burnAmount,
     address _caller
   ) public {
-    vm.assume(_caller != address(0));
+    vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT - 1);
     _burnAmount = bound(_burnAmount, _initialBalance + 1, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _mint(_caller, _initialBalance);
 
     vm.expectRevert("ERC20: burn amount exceeds balance");
     vm.prank(_caller);
-    tokenV3Implementation.burn(_burnAmount);
+    tokenV3Proxy.burn(_burnAmount);
   }
 }
 
 contract BurnFrom is ZkTokenV3Test {
   function _grantBurnerRole(address _to) internal {
     vm.prank(admin);
-    tokenV3Implementation.grantRole(BURNER_ROLE, _to);
+    tokenV3Proxy.grantRole(BURNER_ROLE, _to);
   }
 
   function testFuzz_CallerWithBurnerRoleCanBurnTokensFromAnotherAddress(
@@ -149,19 +193,19 @@ contract BurnFrom is ZkTokenV3Test {
     address _caller,
     address _from
   ) public {
-    vm.assume(_caller != address(0) && _caller != admin);
+    vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     vm.assume(_from != address(0) && _from != admin);
     _grantBurnerRole(_caller);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
     _mint(_from, _initialBalance);
-    uint256 _initialSupply = tokenV3Implementation.totalSupply();
+    uint256 _initialSupply = tokenV3Proxy.totalSupply();
 
     vm.prank(_caller);
-    tokenV3Implementation.burnFrom(_from, _burnAmount);
+    tokenV3Proxy.burnFrom(_from, _burnAmount);
 
-    assertEq(tokenV3Implementation.balanceOf(_from), _initialBalance - _burnAmount);
-    assertEq(tokenV3Implementation.totalSupply(), _initialSupply - _burnAmount);
+    assertEq(tokenV3Proxy.balanceOf(_from), _initialBalance - _burnAmount);
+    assertEq(tokenV3Proxy.totalSupply(), _initialSupply - _burnAmount);
   }
 
   function testFuzz_RevertIf_CallerDoesNotHaveBurnerRole(
@@ -170,7 +214,7 @@ contract BurnFrom is ZkTokenV3Test {
     address _caller,
     address _from
   ) public {
-    vm.assume(_caller != address(0) && _caller != admin);
+    vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     vm.assume(_from != address(0) && _from != admin);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
@@ -178,6 +222,6 @@ contract BurnFrom is ZkTokenV3Test {
 
     vm.expectRevert(_formatAccessControlError(_caller, BURNER_ROLE));
     vm.prank(_caller);
-    tokenV3Implementation.burnFrom(_from, _burnAmount);
+    tokenV3Proxy.burnFrom(_from, _burnAmount);
   }
 }

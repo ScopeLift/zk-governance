@@ -23,6 +23,9 @@ contract ZkTokenV3ForkTest is ZkTokenV3Test {
     vm.createSelectFork(vm.envString("ZK_RPC_URL"), FORK_BLOCK_NUMBER);
     _upgradeProxyImplementationToV3();
     tokenV3 = ZkTokenV3(payable(ZK_TOKEN_PROXY_ADDRESS));
+    vm.startPrank(ADMIN_ADDRESS);
+    tokenV3.grantRole(tokenV3.BURNER_ADMIN_ROLE(), ADMIN_ADDRESS);
+    vm.stopPrank();
   }
 
   function _upgradeProxyImplementationToV3() internal {
@@ -31,9 +34,8 @@ contract ZkTokenV3ForkTest is ZkTokenV3Test {
     _proxy.upgrade(ITransparentUpgradeableProxy(ZK_TOKEN_PROXY_ADDRESS), address(tokenV3Implementation));
   }
 
-  function _grantProxyBurnerRole(address _to) internal {
+  function _grantBurnerRole(address _to) internal {
     vm.startPrank(ADMIN_ADDRESS);
-    tokenV3.grantRole(tokenV3.BURNER_ADMIN_ROLE(), ADMIN_ADDRESS);
     tokenV3.grantRole(tokenV3.BURNER_ROLE(), _to);
     vm.stopPrank();
   }
@@ -44,9 +46,7 @@ contract Initialize is ZkTokenV3ForkTest {
     ProxyAdmin _proxy = ProxyAdmin(payable(PROXY_ADMIN_ADDRESS));
     ZkTokenV2 _tokenV2 = ZkTokenV2(payable(ZK_TOKEN_PROXY_ADDRESS));
     uint256 _tokenSupply = _tokenV2.totalSupply();
-
     ZkTokenV3 _tokenV3Implementation = new ZkTokenV3();
-    _tokenV3Implementation.initializeV2();
 
     vm.prank(_proxy.owner());
     _proxy.upgrade(ITransparentUpgradeableProxy(ZK_TOKEN_PROXY_ADDRESS), address(_tokenV3Implementation));
@@ -60,7 +60,7 @@ contract Initialize is ZkTokenV3ForkTest {
     assertEq(tokenV3.totalSupply(), _tokenSupply);
   }
 
-  function testFuzz_RevertIf_TheInitializerIsCalledAfterUpgrade(
+  function testFuzz_RevertIf_TheInitializerIsCalled(
     address _admin,
     address _initMintReceiver,
     uint256 _initialMintAmount
@@ -69,21 +69,87 @@ contract Initialize is ZkTokenV3ForkTest {
     tokenV3.initialize(_admin, _initMintReceiver, _initialMintAmount);
   }
 
-  function test_RevertIf_TheInitializerV2IsCalledTwiceAfterUpgrade() public {
+  function test_RevertIf_TheInitializerV2IsCalledTwice() public {
     vm.expectRevert("Initializable: contract is already initialized");
     tokenV3.initializeV2();
   }
 }
 
+contract Transfer is ZkTokenV3ForkTest {
+  function testFuzz_CallerCanTransferTokens(
+    uint256 _initialBalance,
+    uint256 _transferAmount,
+    address _caller,
+    address _to
+  ) public {
+    vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
+    vm.assume(_to != address(0));
+    _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - tokenV3.totalSupply());
+    _transferAmount = bound(_transferAmount, 0, _initialBalance);
+    vm.prank(TOKEN_GOVERNOR_TIMELOCK);
+    tokenV3.mint(_caller, _initialBalance);
+
+    vm.prank(_caller);
+    tokenV3.transfer(_to, _transferAmount);
+
+    assertEq(tokenV3.balanceOf(_caller), _initialBalance - _transferAmount);
+    assertEq(tokenV3.balanceOf(_to), _transferAmount);
+  }
+}
+
+contract TransferFrom is ZkTokenV3ForkTest {
+  function testFuzz_CallerCanTransferTokensFromAnotherAddress(
+    uint256 _initialBalance,
+    uint256 _transferAmount,
+    address _caller,
+    address _from,
+    address _to
+  ) public {
+    vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
+    vm.assume(_from != address(0) && _from != PROXY_ADMIN_ADDRESS);
+    vm.assume(_to != address(0));
+    _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - tokenV3.totalSupply());
+    _transferAmount = bound(_transferAmount, 0, _initialBalance);
+    vm.prank(TOKEN_GOVERNOR_TIMELOCK);
+    tokenV3.mint(_from, _initialBalance);
+
+    vm.prank(_from);
+    tokenV3.approve(_caller, _transferAmount);
+
+    vm.prank(_caller);
+    tokenV3.transferFrom(_from, _to, _transferAmount);
+  }
+}
+
+contract Delegate is ZkTokenV3ForkTest {
+  function testFuzz_CallerCanDelegateTokens(
+    uint256 _initialBalance,
+    uint256 _delegateAmount,
+    address _caller,
+    address _delegatee
+  ) public {
+    vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
+    _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - tokenV3.totalSupply());
+    _delegateAmount = bound(_delegateAmount, 0, _initialBalance);
+    vm.prank(TOKEN_GOVERNOR_TIMELOCK);
+    tokenV3.mint(_caller, _initialBalance);
+
+    vm.prank(_caller);
+    tokenV3.delegate(_delegatee);
+
+    assertEq(tokenV3.delegates(_caller), _delegatee);
+  }
+}
+
 contract MaxSupply is ZkTokenV3ForkTest {
-  function test_ReturnsTheCorrectMaxSupplyAfterUpgrade() public {
+  function test_ReturnsTheCorrectMaxSupply() public {
     assertEq(tokenV3.maxSupply(), MAX_SUPPLY);
   }
 }
 
 contract Mint is ZkTokenV3ForkTest {
-  function testFuzz_GovernorCanMintTokensAfterUpgrade(uint256 _mintAmount, address _to) public {
-    vm.assume(_to != address(0) && _to != admin);
+  function testFuzz_GovernorCanMintTokens(uint256 _mintAmount, address _to) public {
+    vm.assume(_to != address(0));
     _mintAmount = bound(_mintAmount, 0, tokenV3.maxSupply() - tokenV3.totalSupply());
     uint256 _initialBalance = tokenV3.balanceOf(_to);
     uint256 _initialSupply = tokenV3.totalSupply();
@@ -92,6 +158,15 @@ contract Mint is ZkTokenV3ForkTest {
 
     assertEq(tokenV3.balanceOf(_to), _initialBalance + _mintAmount);
     assertEq(tokenV3.totalSupply(), _initialSupply + _mintAmount);
+  }
+
+  function testFuzz_RevertIf_MintsAboveMaxSupply(uint256 _mintAmount, address _to) public {
+    vm.assume(_to != address(0));
+    _mintAmount = bound(_mintAmount, tokenV3.maxSupply(), type(uint256).max);
+
+    vm.expectRevert();
+    vm.prank(TOKEN_GOVERNOR_TIMELOCK);
+    tokenV3.mint(_to, _mintAmount);
   }
 
   function testFuzz_RevertIf_CallerDoesNotHaveMinterRole(uint256 _mintAmount, address _caller) public {
@@ -105,10 +180,8 @@ contract Mint is ZkTokenV3ForkTest {
 }
 
 contract Burn is ZkTokenV3ForkTest {
-  function testFuzz_CallerCanBurnTokensAfterUpgrade(uint256 _initialBalance, uint256 _burnAmount, address _caller)
-    public
-  {
-    vm.assume(_caller != address(0) && _caller != admin);
+  function testFuzz_CallerCanBurnTokens(uint256 _initialBalance, uint256 _burnAmount, address _caller) public {
+    vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
     _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - tokenV3.totalSupply());
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
     vm.prank(TOKEN_GOVERNOR_TIMELOCK);
@@ -122,12 +195,12 @@ contract Burn is ZkTokenV3ForkTest {
     assertEq(tokenV3.totalSupply(), _initialSupply - _burnAmount);
   }
 
-  function testFuzz_RevertIf_CallerDoesNotHaveEnoughBalanceAfterUpgrade(
+  function testFuzz_RevertIf_CallerDoesNotHaveEnoughBalance(
     uint256 _initialBalance,
     uint256 _burnAmount,
     address _caller
   ) public {
-    vm.assume(_caller != address(0));
+    vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
     _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - tokenV3.totalSupply() - 1);
     _burnAmount = bound(_burnAmount, _initialBalance + 1, tokenV3.maxSupply() - tokenV3.totalSupply());
     vm.prank(TOKEN_GOVERNOR_TIMELOCK);
@@ -140,7 +213,7 @@ contract Burn is ZkTokenV3ForkTest {
 }
 
 contract BurnFrom is ZkTokenV3ForkTest {
-  function testFuzz_CallerWithBurnerRoleCanBurnTokensFromAnotherAddressAfterUpgrade(
+  function testFuzz_CallerWithBurnerRoleCanBurnTokensFromAnotherAddress(
     uint256 _initialBalance,
     uint256 _burnAmount,
     address _caller,
@@ -148,7 +221,7 @@ contract BurnFrom is ZkTokenV3ForkTest {
   ) public {
     vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
     vm.assume(_from != address(0) && _from != PROXY_ADMIN_ADDRESS);
-    _grantProxyBurnerRole(_caller);
+    _grantBurnerRole(_caller);
     uint256 _initialSupply = tokenV3.totalSupply();
     _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - _initialSupply);
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
@@ -171,7 +244,7 @@ contract BurnFrom is ZkTokenV3ForkTest {
   ) public {
     vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
     vm.assume(_from != address(0) && _from != PROXY_ADMIN_ADDRESS);
-    _grantProxyBurnerRole(_caller);
+    _grantBurnerRole(_caller);
     uint256 _initialSupply = tokenV3.totalSupply();
     _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - _initialSupply);
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
@@ -186,7 +259,7 @@ contract BurnFrom is ZkTokenV3ForkTest {
     assertEq(tokenV3.totalSupply(), _initialSupply + (_initialBalance - _burnAmount));
   }
 
-  function testFuzz_RevertIf_CallerDoesNotHaveBurnerRoleAfterUpgrade(
+  function testFuzz_RevertIf_CallerDoesNotHaveBurnerRole(
     uint256 _initialBalance,
     uint256 _burnAmount,
     address _caller,
@@ -205,7 +278,7 @@ contract BurnFrom is ZkTokenV3ForkTest {
     tokenV3.burnFrom(_from, _burnAmount);
   }
 
-  function testFuzz_RevertIf_CallerDoesNotHaveBurnerRoleAfterUpgradeUsingOldMethod(
+  function testFuzz_RevertIf_CallerDoesNotHaveBurnerRoleUsingOldMethod(
     uint256 _initialBalance,
     uint256 _burnAmount,
     address _caller,
@@ -322,5 +395,38 @@ contract DelegateOnBehalf is ZkTokenV3ForkTest {
 
     vm.expectRevert(abi.encodeWithSelector(ZkTokenV1.DelegateSignatureExpired.selector, _expiry));
     tokenV3.delegateOnBehalf(_signer, _delegatee, _expiry, "");
+  }
+}
+
+contract Integration is ZkTokenV3ForkTest {
+  function testFuzz_IntegrationTest(address _caller, address _to, uint256 _initialBalance, uint256 _amount) public {
+    vm.assume(_caller != address(0) && _caller != PROXY_ADMIN_ADDRESS);
+    _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - tokenV3.totalSupply());
+    _amount = bound(_amount, 0, _initialBalance);
+
+    vm.prank(TOKEN_GOVERNOR_TIMELOCK);
+    tokenV3.mint(_caller, _initialBalance);
+
+    // Transfer
+    vm.prank(_caller);
+    tokenV3.transfer(_to, _amount);
+    assertEq(tokenV3.balanceOf(_caller), _initialBalance - _amount);
+    assertEq(tokenV3.balanceOf(_to), _amount);
+
+    // Approve
+    vm.prank(_caller);
+    tokenV3.approve(_to, _initialBalance - _amount);
+    assertEq(tokenV3.allowance(_caller, _to), _initialBalance - _amount);
+
+    // TransferFrom
+    vm.prank(_to);
+    tokenV3.transferFrom(_caller, _to, _initialBalance - _amount);
+    assertEq(tokenV3.balanceOf(_caller), 0);
+    assertEq(tokenV3.balanceOf(_to), _initialBalance);
+
+    // Delegate
+    vm.prank(_to);
+    tokenV3.delegate(_caller);
+    assertEq(tokenV3.delegates(_to), _caller);
   }
 }
