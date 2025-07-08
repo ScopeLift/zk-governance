@@ -237,7 +237,7 @@ contract BurnFrom is ZkTokenV3ForkTest {
   }
 
   function testFuzz_CallerWithBurnerRoleCanBurnTokensUsingOldMethodFromAnotherAddress(
-    uint256 _initialBalance,
+    uint256 _mintAmount,
     uint256 _burnAmount,
     address _caller,
     address _from
@@ -246,17 +246,18 @@ contract BurnFrom is ZkTokenV3ForkTest {
     vm.assume(_from != address(0) && _from != PROXY_ADMIN_ADDRESS);
     _grantBurnerRole(_caller);
     uint256 _initialSupply = tokenV3.totalSupply();
-    _initialBalance = bound(_initialBalance, 0, tokenV3.maxSupply() - _initialSupply);
-    _burnAmount = bound(_burnAmount, 0, _initialBalance);
+    _mintAmount = bound(_mintAmount, 0, tokenV3.maxSupply() - _initialSupply);
+    _burnAmount = bound(_burnAmount, 0, _mintAmount);
 
     vm.prank(TOKEN_GOVERNOR_TIMELOCK);
-    tokenV3.mint(_from, _initialBalance);
+    tokenV3.mint(_from, _mintAmount);
+    uint256 _initialBalance = tokenV3.balanceOf(_from);
 
     vm.prank(_caller);
     tokenV3.burn(_from, _burnAmount);
 
     assertEq(tokenV3.balanceOf(_from), _initialBalance - _burnAmount);
-    assertEq(tokenV3.totalSupply(), _initialSupply + (_initialBalance - _burnAmount));
+    assertEq(tokenV3.totalSupply(), _initialSupply + (_mintAmount - _burnAmount));
   }
 
   function testFuzz_RevertIf_CallerDoesNotHaveBurnerRole(

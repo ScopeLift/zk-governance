@@ -143,7 +143,7 @@ contract Burn is ZkTokenV3Test {
   function testFuzz_RevertIf_CallerBurnsTokensOnTheImplementationWithoutBalance(uint256 _burnAmount, address _caller)
     public
   {
-    vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
+    vm.assume(_caller != address(0) && _caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     _burnAmount = bound(_burnAmount, 1, MAX_SUPPLY);
 
     vm.expectRevert("ERC20: burn amount exceeds balance");
@@ -151,11 +151,12 @@ contract Burn is ZkTokenV3Test {
     tokenV3Implementation.burn(_burnAmount);
   }
 
-  function testFuzz_CallerCanBurnTokens(uint256 _initialBalance, uint256 _burnAmount, address _caller) public {
+  function testFuzz_CallerCanBurnTokens(uint256 _mintAmount, uint256 _burnAmount, address _caller) public {
     vm.assume(_caller != address(0) && _caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
-    _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
-    _burnAmount = bound(_burnAmount, 0, _initialBalance);
-    _mint(_caller, _initialBalance);
+    _mintAmount = bound(_mintAmount, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
+    _burnAmount = bound(_burnAmount, 0, _mintAmount);
+    _mint(_caller, _mintAmount);
+    uint256 _initialBalance = tokenV3Proxy.balanceOf(_caller);
     uint256 _initialSupply = tokenV3Proxy.totalSupply();
 
     vm.prank(_caller);
@@ -170,7 +171,7 @@ contract Burn is ZkTokenV3Test {
     uint256 _burnAmount,
     address _caller
   ) public {
-    vm.assume(_caller != address(0) && _caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
+    vm.assume(_caller != address(0) && _caller != initMintReceiver && _caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT - 1);
     _burnAmount = bound(_burnAmount, _initialBalance + 1, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _mint(_caller, _initialBalance);
