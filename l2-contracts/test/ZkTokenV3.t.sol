@@ -170,7 +170,7 @@ contract Burn is ZkTokenV3Test {
     uint256 _burnAmount,
     address _caller
   ) public {
-    vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
+    vm.assume(_caller != address(0) && _caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT - 1);
     _burnAmount = bound(_burnAmount, _initialBalance + 1, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _mint(_caller, _initialBalance);
