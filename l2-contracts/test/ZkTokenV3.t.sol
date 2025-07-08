@@ -29,7 +29,7 @@ contract ZkTokenV3Test is Test {
   uint256 constant MAX_SUPPLY = 21_000_000_000e18;
   bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 constant BURNER_ROLE = keccak256("BURNER_ROLE");
-  address constant TOKEN_V3_PROXY_ADMIN_ADDRESS = 0xDE59D53EE7BDB45E5e31817Cdd87f3B97934e161;
+  address constant TOKEN_V3_PROXY_ADMIN_ADDRESS = 0x5c74C60466EFa384D53C7422534C1E242151d686;
 
   function setUp() public virtual {
     tokenV3Implementation = new ZkTokenV3();
