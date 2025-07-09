@@ -196,6 +196,7 @@ contract BurnFrom is ZkTokenV3Test {
   ) public {
     vm.assume(_caller != TOKEN_V3_PROXY_ADMIN_ADDRESS);
     vm.assume(_from != address(0) && _from != admin);
+    uint256 _fromExistingBalance = tokenV3Proxy.balanceOf(_from);
     _grantBurnerRole(_caller);
     _initialBalance = bound(_initialBalance, 0, MAX_SUPPLY - INITIAL_MINT_AMOUNT);
     _burnAmount = bound(_burnAmount, 0, _initialBalance);
@@ -205,7 +206,7 @@ contract BurnFrom is ZkTokenV3Test {
     vm.prank(_caller);
     tokenV3Proxy.burnFrom(_from, _burnAmount);
 
-    assertEq(tokenV3Proxy.balanceOf(_from), _initialBalance - _burnAmount);
+    assertEq(tokenV3Proxy.balanceOf(_from), _initialBalance - _burnAmount + _fromExistingBalance);
     assertEq(tokenV3Proxy.totalSupply(), _initialSupply - _burnAmount);
   }
 
