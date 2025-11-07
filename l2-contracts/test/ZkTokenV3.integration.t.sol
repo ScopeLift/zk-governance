@@ -665,7 +665,7 @@ contract L2ProposalCalldataCall is Test {
 }
 
 interface BridgeHub {
-  function requestL2TransactionDirect(L2TransactionRequestDirect memory) external;
+  function requestL2TransactionDirect(L2TransactionRequestDirect memory) external returns (bytes32);
 }
 
 struct L2TransactionRequestDirect {
@@ -686,8 +686,9 @@ contract L1CrossChainCall is Test {
   }
 
   function test_Proposal() public {
-    bytes memory _l2Calldata = hex"99a88ec40000000000000000000000005a7d6b2f92c77fad6ccabd7ee0624e64907eaf3e0000000000000000000000004fcd824d304e9b1584cdbb582c104bdcbfb11274";
-    BridgeHub(0x303a465B659cBB0ab36eE643eA362c509EEb5213)
+    bytes memory _l2Calldata =
+      hex"99a88ec40000000000000000000000005a7d6b2f92c77fad6ccabd7ee0624e64907eaf3e0000000000000000000000004fcd824d304e9b1584cdbb582c104bdcbfb11274";
+    bytes32 _canonicalTrans = BridgeHub(0x303a465B659cBB0ab36eE643eA362c509EEb5213)
       .requestL2TransactionDirect(
         L2TransactionRequestDirect({
           chainId: 324,
@@ -701,5 +702,6 @@ contract L1CrossChainCall is Test {
           refundRecipient: 0xF378708B88841Abb63e2316E4Fc8f29469beE885
         })
       );
+    assertEq(_canonicalTrans, 0xfc94a148166af2b3460eebe407f7827b708a1efbfedba617a78463714784ee50);
   }
 }
