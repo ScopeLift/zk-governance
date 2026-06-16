@@ -2,12 +2,13 @@ import { config as dotEnvConfig } from "dotenv";
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
 import { Wallet } from "zksync-ethers";
 import * as hre from "hardhat";
+import { verifyContractDeployment } from "./hardhatVerify";
 
 // Before executing a real deployment, be sure to set these values as appropriate for the environment being deployed
 // to. The values used in the script at the time of deployment can be checked in along with the deployment artifacts
 // produced by running the scripts.
 const contractName = "ZkProtocolGovernor";
-const tokenAddress = "0x69e5DC39E2bCb1C17053d2A4ee7CAEAAc5D36f96";  // TODO: We'll need to deploy this contract first to get the actual address
+const tokenAddress = "0xe4eBdD42E083793990ea784589dA800baC291082";  // TODO: We'll need to deploy this contract first to get the actual address
 const votingDelay = 60 * 15; // For test purposes, 15 minutes
 const votingPeriod = 60 * 15; // For test purposes, 15 minutes
 const proposalThreshold = 10; // For testing purposes, actual deployment will need real values
@@ -52,6 +53,9 @@ async function main() {
   console.log(`Timelock PROPOSER, CANCELLER, and EXECUTOR roles granted to ${contractName} contract`);
   (await timelock.renounceRole(await timelock.TIMELOCK_ADMIN_ROLE(), adminAddress)).wait();
   console.log(`ADMIN Role renounced for ${contractName} TimelockController contract (now self-administered)`);
+
+  await verifyContractDeployment(hre, timeLockAddress, timelockConstructorArgs);
+  await verifyContractDeployment(hre, contractAddress, constructorArgs);
 }
 
 main().catch((error) => {

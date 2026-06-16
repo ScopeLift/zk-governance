@@ -2,6 +2,7 @@ import { config as dotEnvConfig } from "dotenv";
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
 import { Wallet } from "zksync-ethers";
 import * as hre from "hardhat";
+import { verifyContractDeployment } from "./hardhatVerify";
 
 // The ADMIN_ACCOUNT is an EOA selected for the deployment and initialization of the ZkTokenV3 contract on testnet.
 const ADMIN_ACCOUNT = "0x506C21058Ec552f2B32A0ED78D3F31E354067A28";
@@ -59,18 +60,7 @@ async function main() {
   const minterBalance = await zkTokenV3.balanceOf(INITIAL_MINT_ACCOUNT);
   console.log(`Balance of ${INITIAL_MINT_ACCOUNT}: ${minterBalance}`);
 
-  if (process.env.VERIFY_AFTER_DEPLOY === "true") {
-    console.log(`Verifying proxy deployment at ${proxyAddress}...`);
-
-    await hre.run("verify:verify", {
-      address: proxyAddress,
-      constructorArguments: [],
-      libraries: {},
-      noCompile: true,
-    });
-
-    console.log("Verification submitted");
-  }
+  await verifyContractDeployment(hre, proxyAddress, []);
 }
 
 main().catch((error) => {
