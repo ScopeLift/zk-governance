@@ -3,15 +3,7 @@ import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
 import { Wallet } from "zksync-ethers";
 import * as hre from "hardhat";
 import { verifyContractDeployment } from "./hardhatVerify";
-
-// The ADMIN_ACCOUNT is an EOA selected for the deployment and initialization of the ZkTokenV3 contract on testnet.
-const ADMIN_ACCOUNT = "0x506C21058Ec552f2B32A0ED78D3F31E354067A28";
-const INITIAL_MINT_ACCOUNT = "0x506C21058Ec552f2B32A0ED78D3F31E354067A28";
-const INITIAL_MINT_AMOUNT = 0;
-
-// The SALT_IMPL and SALT_PROXY values are used to derive the contract addresses and are set to arbitrary values for testnet.
-const SALT_IMPL = "0x8ceb348f712ba12ccf22e8a2228a74a6f75ea1d2ca4afe04ed7aa430528e4b11";
-const SALT_PROXY = "0x8ceb348f712ba12ccf22e8a2228a74a6f75ea1d2ca4afe04ed7aa430528e4b11";
+import { getGovernorDeploymentConfig } from "./GovernorDeploymentConfig";
 
 async function main() {
   dotEnvConfig();
@@ -22,6 +14,9 @@ async function main() {
   }
 
   const contractName = "ZkTokenV3";
+  const deploymentConfig = getGovernorDeploymentConfig(hre.network.name);
+  const tokenConfig = deploymentConfig.zkTokenV3;
+  console.log(`Using ${contractName} deployment config for network ${hre.network.name}`);
   console.log("Deploying " + contractName + "...");
 
   const zkWallet = new Wallet(deployerPrivateKey);
@@ -31,13 +26,13 @@ async function main() {
   const zkTokenV3 = await hre.zkUpgrades.deployProxy(
     deployer.zkWallet,
     contract,
-    [ADMIN_ACCOUNT, INITIAL_MINT_ACCOUNT, INITIAL_MINT_AMOUNT],
+    [tokenConfig.adminAccount, tokenConfig.initialMintAccount, tokenConfig.initialMintAmount],
     {
       initializer: "initialize",
       unsafeAllow: ["constructor"],
-      saltImpl: SALT_IMPL,
+      saltImpl: tokenConfig.saltImpl,
       deploymentTypeImpl: "create2",
-      saltProxy: SALT_PROXY,
+      saltProxy: tokenConfig.saltProxy,
       deploymentTypeProxy: "create2",
     }
   );
@@ -57,8 +52,8 @@ async function main() {
   const maxSupply = await zkTokenV3.maxSupply();
   console.log("ZkTokenV3 maxSupply: ", maxSupply);
 
-  const minterBalance = await zkTokenV3.balanceOf(INITIAL_MINT_ACCOUNT);
-  console.log(`Balance of ${INITIAL_MINT_ACCOUNT}: ${minterBalance}`);
+  const minterBalance = await zkTokenV3.balanceOf(tokenConfig.initialMintAccount);
+  console.log(`Balance of ${tokenConfig.initialMintAccount}: ${minterBalance}`);
 
   await verifyContractDeployment(hre, proxyAddress, []);
 }

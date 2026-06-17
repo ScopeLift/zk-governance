@@ -3,21 +3,19 @@ import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
 import { Wallet } from "zksync-ethers";
 import * as hre from "hardhat";
 import { verifyContractDeployment } from "./hardhatVerify";
+import { getGovernorDeploymentConfig } from "./GovernorDeploymentConfig";
 
 // Before executing a real deployment, be sure to set these values as appropriate for the environment being deployed
 // to. The values used in the script at the time of deployment can be checked in along with the deployment artifacts
 // produced by running the scripts.
 const contractName = "ZkGovOpsGovernor";
-const tokenAddress = "0xe4eBdD42E083793990ea784589dA800baC291082";  // TODO: We'll need to deploy this contract first to get the actual address
-const votingDelay = 60 * 15; // For test purposes, 15 minutes
-const votingPeriod = 60 * 15; // For test purposes, 15 minutes
-const proposalThreshold = 10; // For testing purposes, actual deployment will need real values
-const initialQuorum = 100; // For testing purposes, actual deployment will need real values
-const initialLateQuorum = 60 * 15; // For test purposes, 15 minutes
-const initialGuardian = "0x506C21058Ec552f2B32A0ED78D3F31E354067A28"; // TODO: We'll need a real address for this.. currently using a hardhat placeholder
 
 async function main() {
   dotEnvConfig();
+
+  const deploymentConfig = getGovernorDeploymentConfig(hre.network.name);
+  const governorConfig = deploymentConfig.govOpsGovernor;
+  console.log(`Using ${contractName} deployment config for network ${hre.network.name}`);
 
   const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY;
   if (!deployerPrivateKey) {
@@ -31,7 +29,7 @@ async function main() {
   console.log(`Deploying ${contractName} TimelockController contract...`);
   const timelockContract = await deployer.loadArtifact("TimelockController");
   const adminAddress = await zkWallet.getAddress();
-  const timelockConstructorArgs = [0, [], [], adminAddress];
+  const timelockConstructorArgs = [governorConfig.timelockMinDelay, [], [], adminAddress];
   const timelock = await deployer.deploy(timelockContract, timelockConstructorArgs);
   const timeLockAddress = await timelock.getAddress();
   console.log(`${contractName} Governor TimelockController contract was deployed to ${timeLockAddress}`);
@@ -41,14 +39,14 @@ async function main() {
   const contract = await deployer.loadArtifact(contractName);
   const constructorArgs = [{
 		name: contractName, 
-		token: tokenAddress, 
+		token: deploymentConfig.tokenAddress, 
 		timelock: timeLockAddress, 
-		initialVotingDelay: votingDelay, 
-		initialVotingPeriod: votingPeriod, 
-		initialProposalThreshold: proposalThreshold, 
-		initialQuorum: initialQuorum, 
-		initialVoteExtension: initialLateQuorum, 
-		vetoGuardian: initialGuardian
+		initialVotingDelay: governorConfig.votingDelay, 
+		initialVotingPeriod: governorConfig.votingPeriod, 
+		initialProposalThreshold: governorConfig.proposalThreshold, 
+		initialQuorum: governorConfig.initialQuorum, 
+		initialVoteExtension: governorConfig.initialVoteExtension, 
+		vetoGuardian: governorConfig.vetoGuardian
 	}];
   const govOpsGovernor = await deployer.deploy(contract, constructorArgs);
 
