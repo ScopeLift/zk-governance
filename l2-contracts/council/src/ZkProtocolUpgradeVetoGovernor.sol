@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {SafeCast} from "@openzeppelin/contracts-v5/utils/math/SafeCast.sol";
-import {Checkpoints} from "@openzeppelin/contracts-v5/utils/structs/Checkpoints.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGovernor.sol";
 import {GovernorVotesVetoThresholdFraction} from "council-governance/extensions/GovernorVotesVetoThresholdFraction.sol";
 
@@ -23,7 +23,7 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
   using Checkpoints for Checkpoints.Trace208;
 
   /// @notice A history of fixed veto threshold values, keyed by the governor clock.
-  Checkpoints.Trace208 private _vetoThresholdHistory;
+  Checkpoints.Trace208 private vetoThresholdHistory;
 
   /// @notice Emitted when the fixed veto threshold is changed.
   /// @param oldVetoThreshold The previous veto threshold, in votes.
@@ -51,7 +51,7 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
   /// proposal's threshold.
   /// @return The veto threshold in votes.
   function vetoThreshold(uint256 _timepoint) public view virtual override returns (uint256) {
-    return _optimisticUpperLookupRecent(_vetoThresholdHistory, _timepoint);
+    return _optimisticUpperLookupRecent(vetoThresholdHistory, _timepoint);
   }
 
   /// @notice Sets the fixed veto threshold. Proposals created after this call use the new value. Callable only
@@ -72,7 +72,7 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
     if (_newVetoThreshold == 0) {
       revert ZkProtocolUpgradeVetoGovernor_InvalidVetoThreshold();
     }
-    (uint208 _oldVetoThreshold,) = _vetoThresholdHistory.push(clock(), SafeCast.toUint208(_newVetoThreshold));
+    (uint208 _oldVetoThreshold,) = vetoThresholdHistory.push(clock(), SafeCast.toUint208(_newVetoThreshold));
     emit VetoThresholdUpdated(_oldVetoThreshold, _newVetoThreshold);
   }
 }
