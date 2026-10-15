@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
+import {CommonBase} from "forge-std/Base.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {CouncilERC20} from "council-governance/CouncilERC20.sol";
 import {ZkProtocolUpgradeCouncilGovernor} from "src/ZkProtocolUpgradeCouncilGovernor.sol";
@@ -13,7 +14,7 @@ import {ZkProtocolUpgradeDeploymentConfig} from "script/ZkProtocolUpgradeDeploym
 /// @notice Checks that a deployment of the ZKsync protocol upgrade council governance contracts matches the ZIP
 /// parameters in `ZkProtocolUpgradeDeploymentConfig`: every parameter, every role and every cross-contract reference.
 /// It also checks that the deployer kept no privileges. Each failed check reverts with a message naming it.
-abstract contract ZkProtocolUpgradeDeploymentChecks is ZkProtocolUpgradeDeploymentConfig {
+abstract contract ZkProtocolUpgradeDeploymentChecks is CommonBase, ZkProtocolUpgradeDeploymentConfig {
   /// @notice The contracts deployed by `DeployZkProtocolUpgradeGovernance`.
   struct Deployment {
     CouncilERC20 councilToken;
@@ -21,6 +22,19 @@ abstract contract ZkProtocolUpgradeDeploymentChecks is ZkProtocolUpgradeDeployme
     ZkProtocolUpgradeVetoGovernor vetoGovernor;
     ZkSupermajorityGovernor supermajorityGovernor;
     TimelockController overrideTimelock;
+  }
+
+  /// @notice Reads the addresses of an existing deployment from the environment: `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`,
+  /// `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR` and `OVERRIDE_TIMELOCK`.
+  /// @return _deployment The deployed contracts.
+  function _deploymentFromEnv() internal view returns (Deployment memory _deployment) {
+    _deployment = Deployment({
+      councilToken: CouncilERC20(vm.envAddress("COUNCIL_TOKEN")),
+      councilGovernor: ZkProtocolUpgradeCouncilGovernor(payable(vm.envAddress("COUNCIL_GOVERNOR"))),
+      vetoGovernor: ZkProtocolUpgradeVetoGovernor(payable(vm.envAddress("VETO_GOVERNOR"))),
+      supermajorityGovernor: ZkSupermajorityGovernor(payable(vm.envAddress("SUPERMAJORITY_GOVERNOR"))),
+      overrideTimelock: TimelockController(payable(vm.envAddress("OVERRIDE_TIMELOCK")))
+    });
   }
 
   /// @notice Runs every check against a deployment.
