@@ -14,6 +14,8 @@
 [profile.default]
   auto_detect_remappings = false
   evm_version = "cancun"
+  # The Protocol Timelock role migration script writes its execution manifest here.
+  fs_permissions = [{ access = "read-write", path = "./proposals" }]
   libs = ["lib"]
   optimizer = true
   optimizer_runs = 10_000_000
