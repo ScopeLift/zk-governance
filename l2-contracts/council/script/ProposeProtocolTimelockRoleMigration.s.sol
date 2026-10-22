@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Script, console2} from "forge-std/Script.sol";
+import {console2} from "forge-std/Script.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {ProtocolTimelockRoleMigration} from "script/ProtocolTimelockRoleMigration.sol";
 
@@ -27,7 +27,7 @@ import {ProtocolTimelockRoleMigration} from "script/ProtocolTimelockRoleMigratio
 /// - `forge script script/ProposeProtocolTimelockRoleMigration.s.sol --zksync --rpc-url <era-rpc>`
 /// - `forge script script/ProposeProtocolTimelockRoleMigration.s.sol --zksync --rpc-url <era-rpc> \
 ///   --sig "checkReadyToExecute()"`
-contract ProposeProtocolTimelockRoleMigration is Script, ProtocolTimelockRoleMigration {
+contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMigration {
   /// @notice The directory the script may write to, as allowed by `fs_permissions` in `foundry.toml`.
   string internal constant MANIFEST_DIR = "proposals";
 
@@ -35,12 +35,11 @@ contract ProposeProtocolTimelockRoleMigration is Script, ProtocolTimelockRoleMig
   string internal constant DEFAULT_MANIFEST_PATH = "proposals/protocol-timelock-role-migration.json";
 
   /// @notice Generates, simulates and checks the migration proposal, and writes its execution manifest.
-  /// @return _proposal The migration proposal.
-  function run() public returns (Proposal memory _proposal) {
+  function run() public override {
     address _vetoGovernor = vm.envAddress("VETO_GOVERNOR");
     _checkBeforeMigration(_vetoGovernor);
 
-    _proposal = _migrationProposal(_vetoGovernor);
+    Proposal memory _proposal = _migrationProposal(_vetoGovernor);
     uint256 _proposalId = _hashProposal(_proposal);
     uint256[] memory _inFlight = _inFlightProposals(_proposalId);
 

@@ -6,8 +6,7 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {GovernorTimelockControl} from "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {CommonBase} from "forge-std/Base.sol";
-import {DeployZkProtocolUpgradeGovernanceEraMainnet} from "script/DeployZkProtocolUpgradeGovernance.s.sol";
+import {DeployZkProtocolUpgradeGovernance} from "script/DeployZkProtocolUpgradeGovernance.s.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMainnetConfig.sol";
 
 /// @title ProtocolTimelockRoleMigration
@@ -24,7 +23,10 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 ///
 /// Once the proposal executes, `ZkProtocolGovernor` can no longer queue, execute or cancel on the timelock, so any of
 /// its other proposals still in flight at that point are stranded. `_inFlightProposals` lists them.
-abstract contract ProtocolTimelockRoleMigration is CommonBase, ZkProtocolUpgradeEraMainnetConfig {
+abstract contract ProtocolTimelockRoleMigration is
+  DeployZkProtocolUpgradeGovernance,
+  ZkProtocolUpgradeEraMainnetConfig
+{
   /// @notice The governor that currently holds the proposer, executor and canceller roles on the Protocol Timelock.
   address internal constant PROTOCOL_GOVERNOR = 0x76705327e682F2d96943280D99464Ab61219e34f;
 
@@ -94,14 +96,13 @@ abstract contract ProtocolTimelockRoleMigration is CommonBase, ZkProtocolUpgrade
 
   /// @notice Checks the state the migration starts from: the Veto Governor is fully configured, `ZkProtocolGovernor`
   /// holds the three roles and the Veto Governor holds none, and the timelock administers itself with no delay.
-  /// @dev The deployment is checked by `DeployZkProtocolUpgradeGovernanceEraMainnet.check`, which reads the deployed
-  /// addresses and their deployer from the environment: `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`,
-  /// `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`.
+  /// @dev The deployment is checked with the `DeployZkProtocolUpgradeGovernance` checks, reading the deployed addresses
+  /// and their deployer from the environment: `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`,
+  /// `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`. The checks are inherited rather than run on a
+  /// deployed script contract, which under `--zksync` would run in EraVM, where cheatcodes are unavailable.
   /// @param _vetoGovernor The Veto Governor that receives the roles.
-  function _checkBeforeMigration(address _vetoGovernor) internal {
-    DeployZkProtocolUpgradeGovernanceEraMainnet _deployment = new DeployZkProtocolUpgradeGovernanceEraMainnet();
-    _deployment.disableLogging();
-    _deployment.check();
+  function _checkBeforeMigration(address _vetoGovernor) internal view {
+    _validateDeployment(_deploymentParams(), _deploymentFromEnv(), vm.envAddress("DEPLOYER"));
 
     TimelockController _timelock = TimelockController(payable(PROTOCOL_TIMELOCK));
     require(
