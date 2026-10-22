@@ -197,6 +197,11 @@ jobs:
         timeout-minutes: 15
         run: forge build --zksync
 
+      # The council tests run on the EVM rather than under --zksync, whose emulated EraVM is too slow for their fuzz runs.
+      - name: Run forge tests
+        timeout-minutes: 15
+        run: forge test
+
       - name: Install scopelint
         timeout-minutes: 5
         uses: engineerd/configurator@v0.0.8
