@@ -8,8 +8,12 @@
 [profile.default]
   auto_detect_remappings = false
   evm_version = "cancun"
-  # The Protocol Timelock role migration script writes its execution manifest here.
-  fs_permissions = [{ access = "read-write", path = "./proposals" }]
+  # The Protocol Timelock role migration script writes its execution manifest to `proposals`. The integration tests
+  # deploy the OpenZeppelin v4 contracts they need from the main l2-contracts project's artifacts in `../out`.
+  fs_permissions = [
+    { access = "read-write", path = "./proposals" },
+    { access = "read", path = "../out" },
+  ]
   libs = ["../lib"]
   optimizer = true
   optimizer_runs = 10_000_000
