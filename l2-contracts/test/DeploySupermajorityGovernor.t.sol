@@ -3,9 +3,9 @@ pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
 import {DeploySupermajorityGovernorEraMainnet} from "script/DeploySupermajorityGovernor.s.sol";
+import {ZkProtocolUpgradeDeploymentConfig} from "council/script/ZkProtocolUpgradeDeploymentConfig.sol";
+import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {ERC20VotesFake} from "test/fakes/ERC20VotesFake.sol";
 
 /// @notice Stands in for the Veto Governor's `overrideVeto`, recording who called it.
@@ -19,30 +19,37 @@ contract VetoOverrideTarget {
   }
 }
 
-contract DeploySupermajorityGovernorTest is Test {
-  address constant ZK_TOKEN = 0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E;
+/// @notice Runs the Era mainnet deployment with a test token in place of the ZK token.
+/// @dev The test inherits the script and calls `run` internally, rather than deploying the script, so the script's
+/// cheatcodes run in the EVM and its deployments in EraVM under `--zksync`, as they do under `forge script --zksync`.
+contract DeploySupermajorityGovernorTest is Test, DeploySupermajorityGovernorEraMainnet {
   uint256 constant QUORUM = 1_260_000_000e18;
   uint256 constant OVERRIDE_TIMELOCK_MIN_DELAY = 1 days;
-  bytes32 constant TIMELOCK_ADMIN_ROLE = keccak256("TIMELOCK_ADMIN_ROLE");
 
-  ZkProtocolGovernor governor;
-  TimelockController timelock;
+  // Voting in the end-to-end test needs a token with code, so the mainnet ZK token is replaced by a fake.
+  ERC20VotesFake token;
 
   function setUp() public {
-    // The script only stores the token address; voting in the end-to-end test needs a token with code there.
-    vm.etch(ZK_TOKEN, address(new ERC20VotesFake()).code);
-    DeploySupermajorityGovernorEraMainnet _deploy = new DeploySupermajorityGovernorEraMainnet();
-    _deploy.disableLogging();
-    _deploy.run();
-    governor = _deploy.governor();
-    timelock = _deploy.timelock();
+    token = new ERC20VotesFake();
+    disableLogging();
+    run();
+  }
+
+  function _deploymentParams()
+    internal
+    view
+    override(ZkProtocolUpgradeDeploymentConfig, ZkProtocolUpgradeEraMainnetConfig)
+    returns (DeploymentParams memory _params)
+  {
+    _params = ZkProtocolUpgradeEraMainnetConfig._deploymentParams();
+    _params.zkToken = address(token);
   }
 }
 
 contract Run is DeploySupermajorityGovernorTest {
   function test_DeploysTheGovernorWithTheZipParameters() public {
     assertEq(governor.name(), "ZKsync Supermajority Governor");
-    assertEq(address(governor.token()), ZK_TOKEN);
+    assertEq(address(governor.token()), address(token));
     assertEq(address(governor.timelock()), address(timelock));
     assertEq(governor.votingDelay(), 1 days);
     assertEq(governor.votingPeriod(), 7 days);
@@ -69,9 +76,9 @@ contract Run is DeploySupermajorityGovernorTest {
   function test_PassedProposalCallsOverrideVetoThroughTheOverrideTimelock() public {
     VetoOverrideTarget _target = new VetoOverrideTarget();
     address _voter = makeAddr("Voter");
-    ERC20VotesFake(ZK_TOKEN).mint(_voter, QUORUM);
+    token.mint(_voter, QUORUM);
     vm.prank(_voter);
-    ERC20VotesFake(ZK_TOKEN).delegate(_voter);
+    token.delegate(_voter);
     vm.warp(block.timestamp + 1);
 
     address[] memory _targets = new address[](1);
