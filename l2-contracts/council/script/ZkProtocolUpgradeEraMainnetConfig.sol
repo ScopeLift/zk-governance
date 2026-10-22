@@ -16,7 +16,8 @@ abstract contract ZkProtocolUpgradeEraMainnetConfig is ZkProtocolUpgradeDeployme
   // The offset ZKsync adds to an L1 contract's address when it sends an L1-to-L2 transaction.
   uint160 internal constant L1_TO_L2_ALIAS_OFFSET = uint160(0x1111000000000000000000000000000000001111);
 
-  function _deploymentParams() internal pure override returns (DeploymentParams memory) {
+  // `view` rather than `pure`, so a test configuration can override it to swap in test doubles.
+  function _deploymentParams() internal view virtual override returns (DeploymentParams memory) {
     if (GOVERNANCE_ADMIN != _applyL1ToL2Alias(L1_PROTOCOL_UPGRADE_HANDLER)) {
       revert("ZkProtocolUpgradeEraMainnetConfig: GOVERNANCE_ADMIN is not the aliased L1 ProtocolUpgradeHandler");
     }
