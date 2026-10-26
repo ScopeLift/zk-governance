@@ -25,7 +25,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 
   function run() public virtual {
     DeploymentParams memory _params = _deploymentParams();
-    _validateDeploymentParams(_params);
+    _validateStepOneParams(_params);
     _logDeploymentParams(_params);
 
     vm.startBroadcast();
@@ -66,7 +66,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 
     vm.stopBroadcast();
 
-    _validateDeployment(_params, _deployer);
+    _validateStepOneContracts(_params, address(governor), address(timelock), _deployer);
 
     _log(string.concat("Supermajority Governor (SUPERMAJORITY_GOVERNOR): ", vm.toString(address(governor))));
     _log(string.concat("Override TimelockController (OVERRIDE_TIMELOCK): ", vm.toString(address(timelock))));
@@ -77,7 +77,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
   function check() public virtual {
     governor = ZkProtocolGovernor(payable(vm.envAddress("SUPERMAJORITY_GOVERNOR")));
     timelock = TimelockController(payable(vm.envAddress("OVERRIDE_TIMELOCK")));
-    _validateDeployment(_deploymentParams(), vm.envAddress("DEPLOYER"));
+    _validateStepOneContracts(_deploymentParams(), address(governor), address(timelock), vm.envAddress("DEPLOYER"));
     _log("All step 1 deployment checks passed");
   }
 
@@ -93,18 +93,6 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
       string.concat("  lateQuorumVoteExtension:  ", vm.toString(_params.supermajorityGovernorLateQuorumVoteExtension))
     );
     _log(string.concat("  overrideTimelockMinDelay: ", vm.toString(_params.overrideTimelockMinDelay)));
-  }
-
-  function _validateDeploymentParams(DeploymentParams memory _params) internal view {
-    if (_params.zkToken.code.length == 0) {
-      revert("DeploySupermajorityGovernor: token has no code; set it to the ZK token");
-    }
-  }
-
-  // Checks every governor parameter and timelock role, and that the deployer kept no role on the override timelock.
-  // Step 2 runs the same checks before deploying anything.
-  function _validateDeployment(DeploymentParams memory _params, address _deployer) internal view {
-    _validateStepOneContracts(_params, address(governor), address(timelock), _deployer);
   }
 }
 

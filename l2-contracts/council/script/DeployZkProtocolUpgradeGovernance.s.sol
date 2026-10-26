@@ -83,9 +83,7 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
   // Rejects params that the deployment itself would accept but that leave the governance unusable. Mistakes that make
   // a deployment call revert, such as a duplicate or zero council member, already fail the simulation.
   function _validateDeploymentParams(DeploymentParams memory _params) internal view {
-    if (_params.zkToken.code.length == 0) {
-      revert("DeployZkProtocolUpgradeGovernance: zkToken has no code; set it to the ZK token");
-    }
+    _validateStepOneParams(_params);
     if (_params.protocolTimelock.code.length == 0) {
       revert("DeployZkProtocolUpgradeGovernance: protocolTimelock has no code; set it to the Protocol Timelock");
     }
@@ -94,16 +92,6 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     }
     if (_params.councilMembers.length == 0) {
       revert("DeployZkProtocolUpgradeGovernance: councilMembers is empty");
-    }
-    // After a veto, a Supermajority Governor proposal to override it needs its voting delay, voting period and a
-    // possible late-quorum extension, then the override timelock's delay, all within the veto override window.
-    uint256 _longestOverride = uint256(_params.supermajorityGovernorVotingDelay)
-      + _params.supermajorityGovernorVotingPeriod + _params.supermajorityGovernorLateQuorumVoteExtension
-      + _params.overrideTimelockMinDelay;
-    if (_params.vetoGovernorVetoOverrideDuration < _longestOverride) {
-      revert(
-        "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
-      );
     }
     if (_params.councilGovernorProposalThreshold > _params.votesPerCouncilSeat) {
       revert(

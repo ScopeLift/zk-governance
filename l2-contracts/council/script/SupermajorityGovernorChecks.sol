@@ -31,6 +31,22 @@ interface ITimelockRoles {
 // runs these checks after deploying, and step 2 runs them before deploying anything. They use only interfaces, so both
 // l2-contracts projects compile the same checks.
 abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDeploymentConfig {
+  // Rejects params that would deploy step 1's contracts in a form step 2 can't use. Both steps run it before deploying,
+  // so step 1 fails before broadcasting rather than leaving contracts step 2 would refuse.
+  function _validateStepOneParams(DeploymentParams memory _params) internal view {
+    if (_params.zkToken.code.length == 0) {
+      revert("SupermajorityGovernorChecks: zkToken has no code; set it to the ZK token");
+    }
+    // After a veto, a Supermajority Governor proposal to override it needs its voting delay, voting period and a
+    // possible late-quorum extension, then the override timelock's delay, all within the veto override window.
+    uint256 _longestOverride = uint256(_params.supermajorityGovernorVotingDelay)
+      + _params.supermajorityGovernorVotingPeriod + _params.supermajorityGovernorLateQuorumVoteExtension
+      + _params.overrideTimelockMinDelay;
+    if (_params.vetoGovernorVetoOverrideDuration < _longestOverride) {
+      revert("SupermajorityGovernorChecks: vetoGovernorVetoOverrideDuration is too short for a supermajority override");
+    }
+  }
+
   // Runs every check of the Supermajority Governor and override timelock deployed by `_deployer`.
   function _validateStepOneContracts(
     DeploymentParams memory _params,
@@ -100,7 +116,10 @@ abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDe
       revert("SupermajorityGovernorChecks: the override timelock does not administer itself");
     }
     if (
-      _timelock.hasRole(TIMELOCK_ADMIN_ROLE, _deployer) || _timelock.hasRole(_timelock.PROPOSER_ROLE(), _deployer)
+      // TIMELOCK_ADMIN_ROLE is OpenZeppelin v4's admin role and DEFAULT_ADMIN_ROLE (zero) is v5's, so a wrong timelock
+      // the deployer still administers is caught too.
+      _timelock.hasRole(TIMELOCK_ADMIN_ROLE, _deployer) || _timelock.hasRole(bytes32(0), _deployer)
+        || _timelock.hasRole(_timelock.PROPOSER_ROLE(), _deployer)
         || _timelock.hasRole(_timelock.CANCELLER_ROLE(), _deployer)
         || _timelock.hasRole(_timelock.EXECUTOR_ROLE(), _deployer)
     ) {

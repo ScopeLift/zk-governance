@@ -173,7 +173,7 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     shortenVetoOverrideWindow = true;
 
     vm.expectRevert(
-      "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
+      "SupermajorityGovernorChecks: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
     );
     this.run();
   }
