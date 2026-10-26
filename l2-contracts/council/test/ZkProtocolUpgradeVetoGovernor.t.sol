@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
@@ -93,6 +93,17 @@ contract ZkProtocolUpgradeVetoGovernorTest is Test {
     _governor.setVetoThreshold(_newVetoThreshold);
   }
 
+  // Counts the recorded logs a given contract emitted. EraVM's system contracts emit their own logs on every call, so
+  // only the contract's own logs are counted.
+  function _countLogsEmittedBy(address _emitter) internal returns (uint256 _count) {
+    Vm.Log[] memory _logs = vm.getRecordedLogs();
+    for (uint256 _i = 0; _i < _logs.length; _i += 1) {
+      if (_logs[_i].emitter == _emitter) {
+        _count += 1;
+      }
+    }
+  }
+
   // Excludes the addresses below 0x10000, where EraVM keeps its system contracts and precompiles.
   function _assumeNotASystemAddress(address _account) internal pure {
     vm.assume(uint160(_account) > 0xFFFF);
@@ -134,8 +145,7 @@ contract Constructor is ZkProtocolUpgradeVetoGovernorTest {
   function testFuzz_RevertIf_TheVetoThresholdNumeratorIsNonZero(uint256 _vetoThresholdNumerator, uint256 _vetoThreshold)
     public
   {
-    // Numerators above the denominator (100) are rejected by the base governor before this check runs.
-    _vetoThresholdNumerator = _bound(_vetoThresholdNumerator, 1, 100);
+    _vetoThresholdNumerator = _bound(_vetoThresholdNumerator, 1, type(uint256).max);
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
     BasicCouncilVetoGovernor.ConstructorParams memory _params = _constructorParams(_vetoThresholdNumerator);
 
@@ -249,6 +259,24 @@ contract State is ZkProtocolUpgradeVetoGovernorTest {
     _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
   }
 
+  function testFuzz_UsesAVetoThresholdSetAtTheProposalSnapshot(uint256 _initialVetoThreshold, uint256 _newVetoThreshold)
+    public
+  {
+    // A change at the snapshot timepoint itself is still in force at the snapshot, so it applies to the proposal.
+    _initialVetoThreshold = _bound(_initialVetoThreshold, 2, MAX_VETO_THRESHOLD);
+    _newVetoThreshold = _bound(_newVetoThreshold, 1, _initialVetoThreshold - 1);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    _mintAndSelfDelegateVotes(voter, _newVetoThreshold);
+    uint256 _proposalId = _proposeFromCouncil(_governor);
+
+    vm.warp(_governor.proposalSnapshot(_proposalId));
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+    _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
+    _jumpPastTheProposalDeadline(_governor, _proposalId);
+
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
+  }
+
   function testFuzz_KeepsTheVetoThresholdInForceAtTheProposalSnapshot(
     uint256 _initialVetoThreshold,
     uint256 _newVetoThreshold
@@ -304,22 +332,35 @@ contract ProposalDeadline is ZkProtocolUpgradeVetoGovernorTest {
   }
 }
 
-// The setter ignores the new numerator, so these tests fuzz only the caller.
 contract UpdateVetoThresholdNumerator is ZkProtocolUpgradeVetoGovernorTest {
-  function test_RevertIf_CalledByTheGovernorAdmin() public {
+  function testFuzz_RevertIf_TheAdminSetsANonZeroNumerator(uint256 _newVetoThresholdNumerator) public {
+    _newVetoThresholdNumerator = _bound(_newVetoThresholdNumerator, 1, type(uint256).max);
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(MAX_VETO_THRESHOLD);
 
     vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled.selector);
     vm.prank(governorAdmin);
-    _governor.updateVetoThresholdNumerator(1);
+    _governor.updateVetoThresholdNumerator(_newVetoThresholdNumerator);
   }
 
-  function testFuzz_RevertIf_CalledByAnyOtherAccount(address _caller) public {
-    _assumeNotASystemAddress(_caller);
+  function test_LetsTheAdminSetAZeroNumeratorWithoutRecordingIt() public {
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(MAX_VETO_THRESHOLD);
 
-    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled.selector);
+    vm.recordLogs();
+    vm.prank(governorAdmin);
+    _governor.updateVetoThresholdNumerator(0);
+
+    assertEq(_countLogsEmittedBy(address(_governor)), 0);
+    assertEq(_governor.vetoThresholdNumerator(), 0);
+    assertEq(_governor.vetoThreshold(block.timestamp), MAX_VETO_THRESHOLD);
+  }
+
+  function testFuzz_RevertIf_TheCallerIsNotTheGovernorAdmin(address _caller) public {
+    _assumeNotASystemAddress(_caller);
+    vm.assume(_caller != governorAdmin);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(MAX_VETO_THRESHOLD);
+
+    vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, _caller));
     vm.prank(_caller);
-    _governor.updateVetoThresholdNumerator(1);
+    _governor.updateVetoThresholdNumerator(0);
   }
 }

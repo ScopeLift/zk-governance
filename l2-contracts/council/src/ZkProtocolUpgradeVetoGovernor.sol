@@ -18,11 +18,11 @@ import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGover
 /// while it is pending or active. And an override role can revive a defeated proposal, whether defeated by token
 /// holders or by the guardian, within a set window after its voting period ends.
 /// @dev The veto threshold is checkpointed. Each proposal is judged against the threshold in force at its snapshot, so
-/// a change made before a proposal's snapshot applies to it, and a change made after does not.
+/// a change made at or before a proposal's snapshot applies to it, and a change made after does not.
 ///
 /// The fraction-of-supply threshold settings inherited from `GovernorVotesVetoThresholdFraction` are unused: the
-/// constructor requires the numerator to be zero, `vetoThresholdNumerator` always returns zero, and
-/// `updateVetoThresholdNumerator` reverts.
+/// numerator can only be set to zero, at construction or through `updateVetoThresholdNumerator`, and nothing is
+/// recorded, so `vetoThresholdNumerator` always returns zero.
 contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
   using Checkpoints for Checkpoints.Trace208;
 
@@ -34,8 +34,7 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
   /// @notice Thrown when the veto threshold is set to zero, which would veto every proposal.
   error ZkProtocolUpgradeVetoGovernor__InvalidVetoThreshold();
 
-  /// @notice Thrown when a fraction-of-supply veto threshold is configured, at construction or through
-  /// `updateVetoThresholdNumerator`.
+  /// @notice Thrown when a fraction-of-supply veto threshold other than zero is set, at construction or by the admin.
   error ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
 
   /// @notice The veto threshold, recorded at each timepoint it was set.
@@ -45,9 +44,6 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
   /// governor sets its veto threshold in votes instead.
   /// @param _initialVetoThreshold The number of AGAINST votes that vetoes a proposal. Must be non-zero.
   constructor(ConstructorParams memory _params, uint256 _initialVetoThreshold) BasicCouncilVetoGovernor(_params) {
-    if (_params.vetoThresholdNumerator != 0) {
-      revert ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
-    }
     _setVetoThreshold(_initialVetoThreshold);
   }
 
@@ -65,11 +61,6 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
     _setVetoThreshold(_newVetoThreshold);
   }
 
-  /// @notice Always reverts. The veto threshold is set in votes, with `setVetoThreshold`.
-  function updateVetoThresholdNumerator(uint256) external virtual override {
-    revert ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
-  }
-
   /// @notice Records a new veto threshold at the current timepoint.
   /// @param _newVetoThreshold The new veto threshold, in votes. Must be non-zero.
   function _setVetoThreshold(uint256 _newVetoThreshold) internal virtual {
@@ -78,5 +69,14 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
     }
     (uint256 _oldVetoThreshold,) = vetoThresholdCheckpoints.push(clock(), SafeCast.toUint208(_newVetoThreshold));
     emit VetoThresholdSet(_oldVetoThreshold, _newVetoThreshold);
+  }
+
+  /// @notice Accepts only a zero fraction-of-supply numerator, and records nothing, since the veto threshold is set in
+  /// votes with `setVetoThreshold`. Runs at construction and for every `updateVetoThresholdNumerator` call.
+  /// @param _newVetoThresholdNumerator The new fraction-of-supply numerator.
+  function _updateVetoThresholdNumerator(uint256 _newVetoThresholdNumerator) internal virtual override {
+    if (_newVetoThresholdNumerator != 0) {
+      revert ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
+    }
   }
 }
