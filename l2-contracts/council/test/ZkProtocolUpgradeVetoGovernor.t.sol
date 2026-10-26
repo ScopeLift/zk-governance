@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGovernor.sol";
@@ -86,29 +87,47 @@ contract ZkProtocolUpgradeVetoGovernorTest is Test {
   function _jumpPastTheProposalDeadline(ZkProtocolUpgradeVetoGovernor _governor, uint256 _proposalId) internal {
     vm.warp(_governor.proposalDeadline(_proposalId) + 1);
   }
+
+  function _setVetoThresholdAsAdmin(ZkProtocolUpgradeVetoGovernor _governor, uint256 _newVetoThreshold) internal {
+    vm.prank(governorAdmin);
+    _governor.setVetoThreshold(_newVetoThreshold);
+  }
+
+  // Excludes the addresses below 0x10000, where EraVM keeps its system contracts and precompiles.
+  function _assumeNotASystemAddress(address _account) internal pure {
+    vm.assume(uint160(_account) > 0xFFFF);
+  }
+
+  function _assertState(
+    ZkProtocolUpgradeVetoGovernor _governor,
+    uint256 _proposalId,
+    IGovernor.ProposalState _expectedState
+  ) internal view {
+    assertEq(uint8(_governor.state(_proposalId)), uint8(_expectedState));
+  }
 }
 
 contract Constructor is ZkProtocolUpgradeVetoGovernorTest {
-  function testFuzz_SetsTheVetoThreshold(uint256 _vetoThreshold) public {
+  function testFuzz_SetsTheInitialVetoThreshold(uint256 _vetoThreshold) public {
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
 
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
 
-    assertEq(_governor.VETO_THRESHOLD(), _vetoThreshold);
+    assertEq(_governor.vetoThreshold(block.timestamp), _vetoThreshold);
   }
 
-  function testFuzz_LeavesTheVetoThresholdNumeratorAtZero(uint256 _vetoThreshold) public {
+  function testFuzz_EmitsVetoThresholdSet(uint256 _vetoThreshold) public {
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
 
-    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
-
-    assertEq(_governor.vetoThresholdNumerator(), 0);
+    vm.expectEmit();
+    emit ZkProtocolUpgradeVetoGovernor.VetoThresholdSet(0, _vetoThreshold);
+    _deployGovernorWithVetoThreshold(_vetoThreshold);
   }
 
-  function test_RevertIf_TheVetoThresholdIsZero() public {
+  function test_RevertIf_TheInitialVetoThresholdIsZero() public {
     BasicCouncilVetoGovernor.ConstructorParams memory _params = _constructorParams(0);
 
-    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor_InvalidVetoThreshold.selector);
+    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__InvalidVetoThreshold.selector);
     new ZkProtocolUpgradeVetoGovernor(_params, 0);
   }
 
@@ -120,17 +139,62 @@ contract Constructor is ZkProtocolUpgradeVetoGovernorTest {
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
     BasicCouncilVetoGovernor.ConstructorParams memory _params = _constructorParams(_vetoThresholdNumerator);
 
-    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor_VetoThresholdFractionDisabled.selector);
+    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled.selector);
     new ZkProtocolUpgradeVetoGovernor(_params, _vetoThreshold);
   }
 }
 
-contract VetoThreshold is ZkProtocolUpgradeVetoGovernorTest {
-  function testFuzz_ReturnsTheVetoThresholdAtEveryTimepoint(uint256 _vetoThreshold, uint256 _timepoint) public {
-    _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
-    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
+contract SetVetoThreshold is ZkProtocolUpgradeVetoGovernorTest {
+  function testFuzz_SetsTheVetoThresholdFromTheCurrentTimepoint(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold,
+    uint256 _elapsed
+  ) public {
+    _initialVetoThreshold = _boundToValidVetoThreshold(_initialVetoThreshold);
+    _newVetoThreshold = _boundToValidVetoThreshold(_newVetoThreshold);
+    _elapsed = _bound(_elapsed, 1, 365 days);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    uint256 _deployedAt = block.timestamp;
+    vm.warp(block.timestamp + _elapsed);
 
-    assertEq(_governor.vetoThreshold(_timepoint), _vetoThreshold);
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+
+    assertEq(_governor.vetoThreshold(block.timestamp), _newVetoThreshold);
+    assertEq(_governor.vetoThreshold(block.timestamp - 1), _initialVetoThreshold);
+    assertEq(_governor.vetoThreshold(_deployedAt), _initialVetoThreshold);
+  }
+
+  function testFuzz_EmitsVetoThresholdSet(uint256 _initialVetoThreshold, uint256 _newVetoThreshold) public {
+    _initialVetoThreshold = _boundToValidVetoThreshold(_initialVetoThreshold);
+    _newVetoThreshold = _boundToValidVetoThreshold(_newVetoThreshold);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+
+    vm.expectEmit();
+    emit ZkProtocolUpgradeVetoGovernor.VetoThresholdSet(_initialVetoThreshold, _newVetoThreshold);
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+  }
+
+  function testFuzz_RevertIf_TheNewVetoThresholdIsZero(uint256 _initialVetoThreshold) public {
+    ZkProtocolUpgradeVetoGovernor _governor =
+      _deployGovernorWithVetoThreshold(_boundToValidVetoThreshold(_initialVetoThreshold));
+
+    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__InvalidVetoThreshold.selector);
+    _setVetoThresholdAsAdmin(_governor, 0);
+  }
+
+  function testFuzz_RevertIf_TheCallerIsNotTheGovernorAdmin(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold,
+    address _caller
+  ) public {
+    _assumeNotASystemAddress(_caller);
+    vm.assume(_caller != governorAdmin);
+    ZkProtocolUpgradeVetoGovernor _governor =
+      _deployGovernorWithVetoThreshold(_boundToValidVetoThreshold(_initialVetoThreshold));
+
+    vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, _caller));
+    vm.prank(_caller);
+    _governor.setVetoThreshold(_boundToValidVetoThreshold(_newVetoThreshold));
   }
 }
 
@@ -147,7 +211,7 @@ contract State is ZkProtocolUpgradeVetoGovernorTest {
     _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
     _jumpPastTheProposalDeadline(_governor, _proposalId);
 
-    assertEq(uint8(_governor.state(_proposalId)), uint8(IGovernor.ProposalState.Defeated));
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
   }
 
   function testFuzz_ReturnsSucceededWhenAgainstVotesAreBelowTheVetoThreshold(
@@ -163,7 +227,45 @@ contract State is ZkProtocolUpgradeVetoGovernorTest {
     _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
     _jumpPastTheProposalDeadline(_governor, _proposalId);
 
-    assertEq(uint8(_governor.state(_proposalId)), uint8(IGovernor.ProposalState.Succeeded));
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Succeeded);
+  }
+
+  function testFuzz_UsesAVetoThresholdSetBeforeTheProposalSnapshot(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold
+  ) public {
+    // AGAINST votes equal to the new threshold veto the proposal only if the new, lower threshold applies.
+    _initialVetoThreshold = _bound(_initialVetoThreshold, 2, MAX_VETO_THRESHOLD);
+    _newVetoThreshold = _bound(_newVetoThreshold, 1, _initialVetoThreshold - 1);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    _mintAndSelfDelegateVotes(voter, _newVetoThreshold);
+    uint256 _proposalId = _proposeFromCouncil(_governor);
+
+    // The proposal is still pending, so its snapshot is after this change.
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+    _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
+    _jumpPastTheProposalDeadline(_governor, _proposalId);
+
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
+  }
+
+  function testFuzz_KeepsTheVetoThresholdInForceAtTheProposalSnapshot(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold
+  ) public {
+    // AGAINST votes equal to the initial threshold veto the proposal only if the initial threshold still applies.
+    _initialVetoThreshold = _bound(_initialVetoThreshold, 1, MAX_VETO_THRESHOLD - 1);
+    _newVetoThreshold = _bound(_newVetoThreshold, _initialVetoThreshold + 1, MAX_VETO_THRESHOLD);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    _mintAndSelfDelegateVotes(voter, _initialVetoThreshold);
+    uint256 _proposalId = _proposeFromCouncil(_governor);
+
+    // Voting is open, so the proposal's snapshot is before this change.
+    _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+    _jumpPastTheProposalDeadline(_governor, _proposalId);
+
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
   }
 }
 
@@ -188,6 +290,7 @@ contract ProposalDeadline is ZkProtocolUpgradeVetoGovernorTest {
     uint256 _vetoThreshold,
     uint256 _againstVotes
   ) public {
+    // With a 50% extension share, a veto threshold of 2 or 3 extends at 1 vote, leaving no smaller non-zero vote.
     _vetoThreshold = _bound(_vetoThreshold, 4, MAX_VETO_THRESHOLD);
     _againstVotes = _bound(_againstVotes, 1, _votingPeriodExtensionThreshold(_vetoThreshold) - 1);
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
@@ -201,29 +304,22 @@ contract ProposalDeadline is ZkProtocolUpgradeVetoGovernorTest {
   }
 }
 
+// The setter ignores the new numerator, so these tests fuzz only the caller.
 contract UpdateVetoThresholdNumerator is ZkProtocolUpgradeVetoGovernorTest {
-  function testFuzz_RevertIf_CalledByTheGovernorAdmin(uint256 _vetoThreshold, uint256 _newVetoThresholdNumerator)
-    public
-  {
-    ZkProtocolUpgradeVetoGovernor _governor =
-      _deployGovernorWithVetoThreshold(_boundToValidVetoThreshold(_vetoThreshold));
+  function test_RevertIf_CalledByTheGovernorAdmin() public {
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(MAX_VETO_THRESHOLD);
 
-    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor_VetoThresholdFractionDisabled.selector);
+    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled.selector);
     vm.prank(governorAdmin);
-    _governor.updateVetoThresholdNumerator(_newVetoThresholdNumerator);
+    _governor.updateVetoThresholdNumerator(1);
   }
 
-  function testFuzz_RevertIf_CalledByAnyOtherAccount(
-    uint256 _vetoThreshold,
-    address _caller,
-    uint256 _newVetoThresholdNumerator
-  ) public {
-    vm.assume(_caller != governorAdmin);
-    ZkProtocolUpgradeVetoGovernor _governor =
-      _deployGovernorWithVetoThreshold(_boundToValidVetoThreshold(_vetoThreshold));
+  function testFuzz_RevertIf_CalledByAnyOtherAccount(address _caller) public {
+    _assumeNotASystemAddress(_caller);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(MAX_VETO_THRESHOLD);
 
-    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor_VetoThresholdFractionDisabled.selector);
+    vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled.selector);
     vm.prank(_caller);
-    _governor.updateVetoThresholdNumerator(_newVetoThresholdNumerator);
+    _governor.updateVetoThresholdNumerator(1);
   }
 }

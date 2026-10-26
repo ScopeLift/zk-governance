@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGovernor.sol";
-import {GovernorVotesVetoThresholdFraction} from "council-governance/extensions/GovernorVotesVetoThresholdFraction.sol";
 
 /// @title ZkProtocolUpgradeVetoGovernor
 /// @author [ScopeLift](https://scopelift.co)
@@ -10,51 +11,72 @@ import {GovernorVotesVetoThresholdFraction} from "council-governance/extensions/
 /// @notice A governor through which token holders can veto proposals submitted by a council governor. A proposal here
 /// passes by default: it succeeds at the end of its voting period unless AGAINST votes reach the veto threshold, in
 /// which case it is defeated. Passed proposals are queued and executed through a timelock. The veto threshold is a
-/// fixed number of votes, set when the governor is deployed, rather than a share of the token supply.
+/// number of votes, set at deployment and changeable by the governor's admin, rather than a share of the token supply.
 ///
 /// Three further safeguards apply. If AGAINST votes reach a set percentage of the veto threshold, the voting period is
 /// extended once, giving holders more time to respond to an emerging veto. A guardian can veto a proposal outright
 /// while it is pending or active. And an override role can revive a defeated proposal, whether defeated by token
 /// holders or by the guardian, within a set window after its voting period ends.
-/// @dev The veto threshold cannot be changed. Using a different threshold means deploying a new governor, moving the
-/// timelock's proposer, executor and canceller roles to it, and pointing the council governor at it. The governor's
-/// other parameters can still be changed by its admin.
+/// @dev The veto threshold is checkpointed. Each proposal is judged against the threshold in force at its snapshot, so
+/// a change made before a proposal's snapshot applies to it, and a change made after does not.
 ///
 /// The fraction-of-supply threshold settings inherited from `GovernorVotesVetoThresholdFraction` are unused: the
 /// constructor requires the numerator to be zero, `vetoThresholdNumerator` always returns zero, and
 /// `updateVetoThresholdNumerator` reverts.
 contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
-  /// @notice The number of AGAINST votes that vetoes a proposal.
-  uint256 public immutable VETO_THRESHOLD;
+  using Checkpoints for Checkpoints.Trace208;
 
-  /// @notice Thrown when deploying with a veto threshold of zero, which would veto every proposal.
-  error ZkProtocolUpgradeVetoGovernor_InvalidVetoThreshold();
+  /// @notice Emitted when the veto threshold is set, at deployment or by the admin.
+  /// @param oldVetoThreshold The veto threshold before the change, zero at deployment.
+  /// @param newVetoThreshold The veto threshold after the change.
+  event VetoThresholdSet(uint256 oldVetoThreshold, uint256 newVetoThreshold);
+
+  /// @notice Thrown when the veto threshold is set to zero, which would veto every proposal.
+  error ZkProtocolUpgradeVetoGovernor__InvalidVetoThreshold();
 
   /// @notice Thrown when a fraction-of-supply veto threshold is configured, at construction or through
   /// `updateVetoThresholdNumerator`.
-  error ZkProtocolUpgradeVetoGovernor_VetoThresholdFractionDisabled();
+  error ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
+
+  /// @notice The veto threshold, recorded at each timepoint it was set.
+  Checkpoints.Trace208 private vetoThresholdCheckpoints;
 
   /// @param _params The base governor's constructor parameters. `vetoThresholdNumerator` must be zero, since this
-  /// governor uses a fixed veto threshold instead.
-  /// @param _vetoThreshold The number of AGAINST votes that vetoes a proposal. Must be non-zero.
-  constructor(ConstructorParams memory _params, uint256 _vetoThreshold) BasicCouncilVetoGovernor(_params) {
+  /// governor sets its veto threshold in votes instead.
+  /// @param _initialVetoThreshold The number of AGAINST votes that vetoes a proposal. Must be non-zero.
+  constructor(ConstructorParams memory _params, uint256 _initialVetoThreshold) BasicCouncilVetoGovernor(_params) {
     if (_params.vetoThresholdNumerator != 0) {
-      revert ZkProtocolUpgradeVetoGovernor_VetoThresholdFractionDisabled();
+      revert ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
     }
-    if (_vetoThreshold == 0) {
-      revert ZkProtocolUpgradeVetoGovernor_InvalidVetoThreshold();
-    }
-    VETO_THRESHOLD = _vetoThreshold;
+    _setVetoThreshold(_initialVetoThreshold);
   }
 
-  /// @notice Returns the number of AGAINST votes that vetoes a proposal, which is `VETO_THRESHOLD` at every timepoint.
-  /// @return The veto threshold in votes.
-  function vetoThreshold(uint256) public view virtual override returns (uint256) {
-    return VETO_THRESHOLD;
+  /// @notice Returns the number of AGAINST votes that vetoes a proposal whose snapshot is `_timepoint`.
+  /// @param _timepoint The timepoint to read the veto threshold at.
+  /// @return The latest veto threshold set at or before `_timepoint`.
+  function vetoThreshold(uint256 _timepoint) public view virtual override returns (uint256) {
+    return _optimisticUpperLookupRecent(vetoThresholdCheckpoints, _timepoint);
   }
 
-  /// @notice Always reverts. The veto threshold is a fixed number of votes, set at deployment.
-  function updateVetoThresholdNumerator(uint256) external virtual override(GovernorVotesVetoThresholdFraction) {
-    revert ZkProtocolUpgradeVetoGovernor_VetoThresholdFractionDisabled();
+  /// @notice Sets the number of AGAINST votes that vetoes a proposal, from the current timepoint on. Proposals whose
+  /// snapshot is earlier keep the threshold in force at their snapshot. Only the governor's admin can call it.
+  /// @param _newVetoThreshold The new veto threshold, in votes. Must be non-zero.
+  function setVetoThreshold(uint256 _newVetoThreshold) external virtual onlyGovernance {
+    _setVetoThreshold(_newVetoThreshold);
+  }
+
+  /// @notice Always reverts. The veto threshold is set in votes, with `setVetoThreshold`.
+  function updateVetoThresholdNumerator(uint256) external virtual override {
+    revert ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled();
+  }
+
+  /// @notice Records a new veto threshold at the current timepoint.
+  /// @param _newVetoThreshold The new veto threshold, in votes. Must be non-zero.
+  function _setVetoThreshold(uint256 _newVetoThreshold) internal virtual {
+    if (_newVetoThreshold == 0) {
+      revert ZkProtocolUpgradeVetoGovernor__InvalidVetoThreshold();
+    }
+    (uint256 _oldVetoThreshold,) = vetoThresholdCheckpoints.push(clock(), SafeCast.toUint208(_newVetoThreshold));
+    emit VetoThresholdSet(_oldVetoThreshold, _newVetoThreshold);
   }
 }
