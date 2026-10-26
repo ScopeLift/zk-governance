@@ -50,9 +50,10 @@ contract ZkProtocolGovernorSupermajorityTest is Test {
     _proposalId = governor.propose(_targets, _values, _calldatas, "Override a veto");
   }
 
-  // Skips voters with no votes, since the governor rejects a vote with no weight and tests may leave a side at zero.
+  // Skips voters with no votes at the proposal's snapshot, since the governor rejects a vote with no weight and tests
+  // may leave a side at zero.
   function _castVoteIfHasVotes(uint256 _proposalId, address _voter, uint8 _support) internal {
-    if (token.getVotes(_voter) == 0) {
+    if (token.getPastVotes(_voter, governor.proposalSnapshot(_proposalId)) == 0) {
       return;
     }
     vm.prank(_voter);
@@ -141,6 +142,13 @@ contract SupermajorityState is ZkProtocolGovernorSupermajorityTest {
     assertEq(
       uint8(_stateAfterSplitVote(_forVotes, _againstVotes, _abstainVotes)), uint8(IGovernor.ProposalState.Succeeded)
     );
+  }
+
+  function testFuzz_DefeatedWhenSplitVoteAgainstPartIsAtLeastForPart(uint128 _forVotes, uint128 _againstVotes) public {
+    _forVotes = uint128(bound(_forVotes, QUORUM, MAX_VOTES));
+    _againstVotes = uint128(bound(_againstVotes, _forVotes, MAX_VOTES));
+
+    assertEq(uint8(_stateAfterSplitVote(_forVotes, _againstVotes, 0)), uint8(IGovernor.ProposalState.Defeated));
   }
 
   function testFuzz_DefeatedWhenSplitVoteForPartIsBelowQuorumEvenWithAbstainPart(
