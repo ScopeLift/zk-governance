@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {VmSafe} from "forge-std/Vm.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {BasicCouncilGovernor} from "council-governance/BasicCouncilGovernor.sol";
@@ -40,15 +39,13 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     _validateDeploymentParams(_params);
     _logDeploymentParams(_params, _deployment);
 
+    // The broadcasting account, read inside a broadcast so it is the deployer rather than the script contract.
     vm.startBroadcast();
-    (VmSafe.CallerMode _mode, address _deployer,) = vm.readCallers();
+    (, address _deployer,) = vm.readCallers();
     vm.stopBroadcast();
-    if (_mode != VmSafe.CallerMode.RecurrentBroadcast) {
-      revert("DeployZkProtocolUpgradeGovernance: the deployer is not broadcasting");
-    }
     // Fail before deploying anything if the step 1 contracts are wrong. Once the Veto Governor is deployed, replacing
     // its override timelock takes a full ZIP, since only the governance admin can call `setVetoOverrideRole`.
-    _validateOverrideTimelock(_params, _deployment, _deployer);
+    _validateStepOneContracts(_params, _deployment, _deployer);
 
     vm.startBroadcast();
     _deployCouncilToken(_params, _deployer);

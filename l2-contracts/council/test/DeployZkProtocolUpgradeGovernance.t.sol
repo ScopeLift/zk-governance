@@ -31,13 +31,32 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
   function _deployStepOneAs(address _admin) internal {
     address[] memory _openExecutor = new address[](1);
     overrideTimelock = new TimelockController(1 days, new address[](0), _openExecutor, _admin);
-    supermajorityGovernor = new FakeSupermajorityGovernor(address(overrideTimelock));
+    supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(address(overrideTimelock)));
     vm.startPrank(_admin);
     overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), address(supermajorityGovernor));
     overrideTimelock.grantRole(overrideTimelock.CANCELLER_ROLE(), address(supermajorityGovernor));
     // The real override timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, address(overrideTimelock));
     vm.stopPrank();
+  }
+
+  // The settings step 1 gives the Supermajority Governor, from the same params step 2 checks it against.
+  function _supermajorityGovernorSettings(address _timelock)
+    internal
+    view
+    returns (FakeSupermajorityGovernor.Settings memory)
+  {
+    DeploymentParams memory _params = _deploymentParams();
+    return FakeSupermajorityGovernor.Settings({
+      name: _params.supermajorityGovernorName,
+      token: _params.zkToken,
+      timelock: _timelock,
+      votingDelay: _params.supermajorityGovernorVotingDelay,
+      votingPeriod: _params.supermajorityGovernorVotingPeriod,
+      proposalThreshold: _params.supermajorityGovernorProposalThreshold,
+      quorum: _params.supermajorityGovernorQuorum,
+      lateQuorumVoteExtension: _params.supermajorityGovernorLateQuorumVoteExtension
+    });
   }
 
   // Supplies step 1's contracts directly. Environment variables are shared by tests running in parallel, so only the
@@ -128,11 +147,22 @@ contract Check is DeployZkProtocolUpgradeGovernanceTest {
 // `vm.expectRevert` applies to the next external call, so these tests call `run` through `this`.
 contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
   function test_RevertIf_TheOverrideTimelockDoesNotBelongToTheSupermajorityGovernor() public {
-    supermajorityGovernor = new FakeSupermajorityGovernor(makeAddr("Other Timelock"));
+    supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(makeAddr("Other Timelock")));
 
     vm.expectRevert(
       "ZkProtocolUpgradeGovernanceChecks: the Supermajority Governor's timelock is not the override timelock"
     );
+    this.run();
+  }
+
+  function test_RevertIf_TheSupermajorityGovernorHasADifferentQuorum() public {
+    FakeSupermajorityGovernor.Settings memory _settings = _supermajorityGovernorSettings(address(overrideTimelock));
+    _settings.quorum += 1;
+    supermajorityGovernor = new FakeSupermajorityGovernor(_settings);
+    overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), address(supermajorityGovernor));
+    overrideTimelock.grantRole(overrideTimelock.CANCELLER_ROLE(), address(supermajorityGovernor));
+
+    vm.expectRevert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor quorum does not match the params");
     this.run();
   }
 

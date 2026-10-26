@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {VmSafe} from "forge-std/Vm.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
@@ -31,10 +30,8 @@ abstract contract DeploySupermajorityGovernor is DeployBase, ZkProtocolUpgradeDe
     _logDeploymentParams(_params);
 
     vm.startBroadcast();
-    (VmSafe.CallerMode _mode, address _deployer,) = vm.readCallers();
-    if (_mode != VmSafe.CallerMode.RecurrentBroadcast) {
-      revert("DeploySupermajorityGovernor: the deployer is not broadcasting");
-    }
+    // The broadcasting account, read inside the broadcast so it is the deployer rather than the script contract.
+    (, address _deployer,) = vm.readCallers();
 
     address[] memory _executors = new address[](1);
     _executors[0] = address(0);
@@ -74,6 +71,15 @@ abstract contract DeploySupermajorityGovernor is DeployBase, ZkProtocolUpgradeDe
 
     _log(string.concat("Supermajority Governor (SUPERMAJORITY_GOVERNOR): ", vm.toString(address(governor))));
     _log(string.concat("Override TimelockController (OVERRIDE_TIMELOCK): ", vm.toString(address(timelock))));
+  }
+
+  // Runs the same checks against an existing step 1 deployment, reading `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK`
+  // and `DEPLOYER`, the account that ran step 1.
+  function check() public virtual {
+    governor = ZkProtocolGovernor(payable(vm.envAddress("SUPERMAJORITY_GOVERNOR")));
+    timelock = TimelockController(payable(vm.envAddress("OVERRIDE_TIMELOCK")));
+    _validateDeployment(_deploymentParams(), vm.envAddress("DEPLOYER"));
+    _log("All step 1 deployment checks passed");
   }
 
   function _logDeploymentParams(DeploymentParams memory _params) internal view {
@@ -156,7 +162,8 @@ abstract contract DeploySupermajorityGovernor is DeployBase, ZkProtocolUpgradeDe
 // `forge script script/DeploySupermajorityGovernor.s.sol:DeploySupermajorityGovernorEraMainnet --zksync
 // --rpc-url <era-rpc> --broadcast`
 // Omit `--broadcast` for a dry run. Pass the logged addresses to step 2 as `SUPERMAJORITY_GOVERNOR` and
-// `OVERRIDE_TIMELOCK`.
+// `OVERRIDE_TIMELOCK`. After broadcasting, add `--sig "check()"` with those two and `DEPLOYER` set to check the
+// deployment on chain.
 contract DeploySupermajorityGovernorEraMainnet is DeploySupermajorityGovernor, ZkProtocolUpgradeEraMainnetConfig {
   // Script entrypoint
   function run() public override {

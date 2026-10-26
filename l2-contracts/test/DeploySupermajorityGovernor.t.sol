@@ -105,3 +105,13 @@ contract Run is DeploySupermajorityGovernorTest {
     assertEq(_target.overriddenProposalId(), 42);
   }
 }
+
+contract Check is DeploySupermajorityGovernorTest {
+  function test_PassesForTheDeploymentRunMade() public {
+    vm.setEnv("SUPERMAJORITY_GOVERNOR", vm.toString(address(governor)));
+    vm.setEnv("OVERRIDE_TIMELOCK", vm.toString(address(timelock)));
+    vm.setEnv("DEPLOYER", vm.toString(DEFAULT_SENDER));
+
+    check();
+  }
+}
