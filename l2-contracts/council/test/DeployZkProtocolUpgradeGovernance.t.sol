@@ -18,6 +18,8 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
   TimelockController protocolTimelock;
   TimelockController overrideTimelock;
   FakeSupermajorityGovernor supermajorityGovernor;
+  // When set, the params' veto override window is cut to one day, shorter than a supermajority override takes.
+  bool shortenVetoOverrideWindow;
 
   function setUp() public virtual {
     zkToken = new FakeVotesToken();
@@ -74,6 +76,9 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     _params = ZkProtocolUpgradeEraMainnetConfig._deploymentParams();
     _params.zkToken = address(zkToken);
     _params.protocolTimelock = address(protocolTimelock);
+    if (shortenVetoOverrideWindow) {
+      _params.vetoGovernorVetoOverrideDuration = 1 days;
+    }
   }
 }
 
@@ -149,9 +154,7 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
   function test_RevertIf_TheOverrideTimelockDoesNotBelongToTheSupermajorityGovernor() public {
     supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(makeAddr("Other Timelock")));
 
-    vm.expectRevert(
-      "ZkProtocolUpgradeGovernanceChecks: the Supermajority Governor's timelock is not the override timelock"
-    );
+    vm.expectRevert("SupermajorityGovernorChecks: the Supermajority Governor's timelock is not the override timelock");
     this.run();
   }
 
@@ -162,7 +165,16 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), address(supermajorityGovernor));
     overrideTimelock.grantRole(overrideTimelock.CANCELLER_ROLE(), address(supermajorityGovernor));
 
-    vm.expectRevert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor quorum does not match the params");
+    vm.expectRevert("SupermajorityGovernorChecks: Supermajority Governor quorum does not match the params");
+    this.run();
+  }
+
+  function test_RevertIf_TheVetoOverrideWindowIsShorterThanASupermajorityOverride() public {
+    shortenVetoOverrideWindow = true;
+
+    vm.expectRevert(
+      "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
+    );
     this.run();
   }
 
@@ -178,7 +190,7 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     vm.prank(DEFAULT_SENDER);
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, DEFAULT_SENDER);
 
-    vm.expectRevert("ZkProtocolUpgradeGovernanceChecks: the deployer holds a role on the override timelock");
+    vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
     this.run();
   }
 }

@@ -45,7 +45,9 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     vm.stopBroadcast();
     // Fail before deploying anything if the step 1 contracts are wrong. Once the Veto Governor is deployed, replacing
     // its override timelock takes a full ZIP, since only the governance admin can call `setVetoOverrideRole`.
-    _validateStepOneContracts(_params, _deployment, _deployer);
+    _validateStepOneContracts(
+      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _deployer
+    );
 
     vm.startBroadcast();
     _deployCouncilToken(_params, _deployer);
@@ -92,6 +94,16 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     }
     if (_params.councilMembers.length == 0) {
       revert("DeployZkProtocolUpgradeGovernance: councilMembers is empty");
+    }
+    // After a veto, a Supermajority Governor proposal to override it needs its voting delay, voting period and a
+    // possible late-quorum extension, then the override timelock's delay, all within the veto override window.
+    uint256 _longestOverride = uint256(_params.supermajorityGovernorVotingDelay)
+      + _params.supermajorityGovernorVotingPeriod + _params.supermajorityGovernorLateQuorumVoteExtension
+      + _params.overrideTimelockMinDelay;
+    if (_params.vetoGovernorVetoOverrideDuration < _longestOverride) {
+      revert(
+        "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
+      );
     }
     if (_params.councilGovernorProposalThreshold > _params.votesPerCouncilSeat) {
       revert(

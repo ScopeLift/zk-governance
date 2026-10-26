@@ -5,27 +5,12 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 import {CouncilERC20} from "council-governance/CouncilERC20.sol";
 import {ZkProtocolUpgradeCouncilGovernor} from "src/ZkProtocolUpgradeCouncilGovernor.sol";
 import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.sol";
-import {DeployBase} from "script/DeployBase.sol";
-import {ZkProtocolUpgradeDeploymentConfig} from "script/ZkProtocolUpgradeDeploymentConfig.sol";
-
-// The parts of the Supermajority Governor, the OpenZeppelin v4 `ZkProtocolGovernor`, that the checks read. This project
-// cannot import the contract itself.
-interface ISupermajorityGovernor {
-  function name() external view returns (string memory);
-  function token() external view returns (address);
-  function timelock() external view returns (address);
-  function clock() external view returns (uint48);
-  function votingDelay() external view returns (uint256);
-  function votingPeriod() external view returns (uint256);
-  function proposalThreshold() external view returns (uint256);
-  function quorum(uint256 _timepoint) external view returns (uint256);
-  function lateQuorumVoteExtension() external view returns (uint64);
-}
+import {SupermajorityGovernorChecks} from "script/SupermajorityGovernorChecks.sol";
 
 // Checks a protocol upgrade governance deployment against its params: every contract's settings, the wiring between
 // them, the handover of every admin role to the governance admin, and that the deployer kept no privileges. The deploy
 // script runs these checks after deploying, and other scripts inherit them to check an existing deployment.
-abstract contract ZkProtocolUpgradeGovernanceChecks is DeployBase, ZkProtocolUpgradeDeploymentConfig {
+abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChecks {
   struct Deployment {
     CouncilERC20 councilToken;
     ZkProtocolUpgradeCouncilGovernor councilGovernor;
@@ -56,54 +41,9 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is DeployBase, ZkProtocolUpg
     _validateCouncilToken(_params, _deployment, _deployer);
     _validateCouncilGovernor(_params, _deployment);
     _validateVetoGovernor(_params, _deployment);
-    _validateStepOneContracts(_params, _deployment, _deployer);
-  }
-
-  // Checks the contracts step 1 deployed: the Supermajority Governor's settings, and that the override timelock belongs
-  // to it, administers itself, and gives `_deployer` no role.
-  function _validateStepOneContracts(DeploymentParams memory _params, Deployment memory _deployment, address _deployer)
-    internal
-    view
-  {
-    if (_deployment.supermajorityGovernor.code.length == 0 || address(_deployment.overrideTimelock).code.length == 0) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the Supermajority Governor or override timelock is not deployed");
-    }
-    _validateSupermajorityGovernor(_params, _deployment);
-    _validateOverrideTimelock(_params, _deployment, _deployer);
-  }
-
-  function _validateSupermajorityGovernor(DeploymentParams memory _params, Deployment memory _deployment)
-    internal
-    view
-  {
-    ISupermajorityGovernor _governor = ISupermajorityGovernor(_deployment.supermajorityGovernor);
-
-    if (!_eq(_governor.name(), _params.supermajorityGovernorName)) {
-      revert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor name does not match the params");
-    }
-    if (_governor.token() != _params.zkToken) {
-      revert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor token is not the ZK token");
-    }
-    if (_governor.timelock() != address(_deployment.overrideTimelock)) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the Supermajority Governor's timelock is not the override timelock");
-    }
-    if (_governor.votingDelay() != _params.supermajorityGovernorVotingDelay) {
-      revert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor voting delay does not match the params");
-    }
-    if (_governor.votingPeriod() != _params.supermajorityGovernorVotingPeriod) {
-      revert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor voting period does not match the params");
-    }
-    if (_governor.proposalThreshold() != _params.supermajorityGovernorProposalThreshold) {
-      revert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor proposal threshold does not match the params");
-    }
-    if (_governor.quorum(_governor.clock()) != _params.supermajorityGovernorQuorum) {
-      revert("ZkProtocolUpgradeGovernanceChecks: Supermajority Governor quorum does not match the params");
-    }
-    if (_governor.lateQuorumVoteExtension() != _params.supermajorityGovernorLateQuorumVoteExtension) {
-      revert(
-        "ZkProtocolUpgradeGovernanceChecks: Supermajority Governor late-quorum extension does not match the params"
-      );
-    }
+    _validateStepOneContracts(
+      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _deployer
+    );
   }
 
   function _validateCouncilToken(DeploymentParams memory _params, Deployment memory _deployment, address _deployer)
@@ -220,39 +160,6 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is DeployBase, ZkProtocolUpg
     }
     if (_governor.vetoOverrideDuration() != _params.vetoGovernorVetoOverrideDuration) {
       revert("ZkProtocolUpgradeGovernanceChecks: veto governor override duration does not match the params");
-    }
-  }
-
-  // Checks that the override timelock from step 1 is the Supermajority Governor's proposer and canceller, administers
-  // itself, and gives the deployer no role.
-  function _validateOverrideTimelock(DeploymentParams memory _params, Deployment memory _deployment, address _deployer)
-    internal
-    view
-  {
-    TimelockController _timelock = _deployment.overrideTimelock;
-    address _governor = _deployment.supermajorityGovernor;
-
-    if (_timelock.getMinDelay() != _params.overrideTimelockMinDelay) {
-      revert("ZkProtocolUpgradeGovernanceChecks: override timelock delay does not match the params");
-    }
-    if (!_timelock.hasRole(_timelock.PROPOSER_ROLE(), _governor)) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the Supermajority Governor is not the override timelock's proposer");
-    }
-    if (!_timelock.hasRole(_timelock.CANCELLER_ROLE(), _governor)) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the Supermajority Governor is not the override timelock's canceller");
-    }
-    if (!_timelock.hasRole(_timelock.EXECUTOR_ROLE(), address(0))) {
-      revert("ZkProtocolUpgradeGovernanceChecks: override timelock execution is not open to everyone");
-    }
-    if (!_timelock.hasRole(TIMELOCK_ADMIN_ROLE, address(_timelock))) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the override timelock does not administer itself");
-    }
-    if (
-      _timelock.hasRole(TIMELOCK_ADMIN_ROLE, _deployer) || _timelock.hasRole(_timelock.PROPOSER_ROLE(), _deployer)
-        || _timelock.hasRole(_timelock.CANCELLER_ROLE(), _deployer)
-        || _timelock.hasRole(_timelock.EXECUTOR_ROLE(), _deployer)
-    ) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the deployer holds a role on the override timelock");
     }
   }
 }

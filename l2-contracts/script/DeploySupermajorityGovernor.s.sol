@@ -4,8 +4,7 @@ pragma solidity 0.8.24;
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
-import {DeployBase} from "council/script/DeployBase.sol";
-import {ZkProtocolUpgradeDeploymentConfig} from "council/script/ZkProtocolUpgradeDeploymentConfig.sol";
+import {SupermajorityGovernorChecks} from "council/script/SupermajorityGovernorChecks.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgradeEraMainnetConfig.sol";
 
 // Step 1 of 2. Deploys the ZKsync Supermajority Governor and its override timelock. Step 2 is
@@ -20,7 +19,7 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgrad
 // The governor needs the timelock's address and the timelock needs the governor as its proposer, so the timelock is
 // deployed with the deployer as a temporary admin. The deployer grants the governor the proposer and canceller roles
 // and then renounces the admin role, leaving the timelock administered only by itself.
-abstract contract DeploySupermajorityGovernor is DeployBase, ZkProtocolUpgradeDeploymentConfig {
+abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
   ZkProtocolGovernor public governor;
   TimelockController public timelock;
 
@@ -102,57 +101,10 @@ abstract contract DeploySupermajorityGovernor is DeployBase, ZkProtocolUpgradeDe
     }
   }
 
-  // Checks every parameter and role, and that the deployer kept no role on the override timelock. Step 2 checks the
-  // link between the override timelock and the governor again before deploying anything.
+  // Checks every governor parameter and timelock role, and that the deployer kept no role on the override timelock.
+  // Step 2 runs the same checks before deploying anything.
   function _validateDeployment(DeploymentParams memory _params, address _deployer) internal view {
-    if (!_eq(governor.name(), _params.supermajorityGovernorName)) {
-      revert("DeploySupermajorityGovernor: governor name does not match the params");
-    }
-    if (address(governor.token()) != _params.zkToken) {
-      revert("DeploySupermajorityGovernor: governor token does not match the params");
-    }
-    if (governor.timelock() != address(timelock)) {
-      revert("DeploySupermajorityGovernor: governor timelock is not the override timelock");
-    }
-    if (governor.votingDelay() != _params.supermajorityGovernorVotingDelay) {
-      revert("DeploySupermajorityGovernor: governor voting delay does not match the params");
-    }
-    if (governor.votingPeriod() != _params.supermajorityGovernorVotingPeriod) {
-      revert("DeploySupermajorityGovernor: governor voting period does not match the params");
-    }
-    if (governor.proposalThreshold() != _params.supermajorityGovernorProposalThreshold) {
-      revert("DeploySupermajorityGovernor: governor proposal threshold does not match the params");
-    }
-    if (governor.quorum(governor.clock()) != _params.supermajorityGovernorQuorum) {
-      revert("DeploySupermajorityGovernor: governor quorum does not match the params");
-    }
-    if (governor.lateQuorumVoteExtension() != _params.supermajorityGovernorLateQuorumVoteExtension) {
-      revert("DeploySupermajorityGovernor: governor late-quorum extension does not match the params");
-    }
-
-    if (timelock.getMinDelay() != _params.overrideTimelockMinDelay) {
-      revert("DeploySupermajorityGovernor: override timelock delay does not match the params");
-    }
-    if (!timelock.hasRole(timelock.PROPOSER_ROLE(), address(governor))) {
-      revert("DeploySupermajorityGovernor: the governor is not the override timelock's proposer");
-    }
-    if (!timelock.hasRole(timelock.CANCELLER_ROLE(), address(governor))) {
-      revert("DeploySupermajorityGovernor: the governor is not the override timelock's canceller");
-    }
-    if (!timelock.hasRole(timelock.EXECUTOR_ROLE(), address(0))) {
-      revert("DeploySupermajorityGovernor: override timelock execution is not open to everyone");
-    }
-    if (!timelock.hasRole(timelock.TIMELOCK_ADMIN_ROLE(), address(timelock))) {
-      revert("DeploySupermajorityGovernor: the override timelock does not administer itself");
-    }
-    if (
-      timelock.hasRole(timelock.TIMELOCK_ADMIN_ROLE(), _deployer)
-        || timelock.hasRole(timelock.PROPOSER_ROLE(), _deployer)
-        || timelock.hasRole(timelock.CANCELLER_ROLE(), _deployer)
-        || timelock.hasRole(timelock.EXECUTOR_ROLE(), _deployer)
-    ) {
-      revert("DeploySupermajorityGovernor: the deployer kept a role on the override timelock");
-    }
+    _validateStepOneContracts(_params, address(governor), address(timelock), _deployer);
   }
 }
 
