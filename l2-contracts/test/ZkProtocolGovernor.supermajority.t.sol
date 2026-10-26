@@ -25,16 +25,18 @@ contract ZkProtocolGovernorSupermajorityTest is Test {
   address forVoter = makeAddr("For Voter");
   address againstVoter = makeAddr("Against Voter");
   address abstainVoter = makeAddr("Abstain Voter");
+  address splitVoter = makeAddr("Split Voter");
 
   function setUp() public virtual {
     token = new ERC20VotesFake();
+    // These tests only count votes, so the proposal threshold is zero and the timelock grants the governor no roles.
     timelock = new TimelockController(1 days, new address[](0), new address[](0), address(this));
     governor = new ZkProtocolGovernor(
       "ZKsync Supermajority Governor", IVotes(address(token)), timelock, 1 days, 7 days, 0, QUORUM, 3 days
     );
   }
 
-  function _giveVotes(address _voter, uint256 _amount) internal {
+  function _mintAndSelfDelegateVotes(address _voter, uint256 _amount) internal {
     token.mint(_voter, _amount);
     vm.prank(_voter);
     token.delegate(_voter);
@@ -48,7 +50,8 @@ contract ZkProtocolGovernorSupermajorityTest is Test {
     _proposalId = governor.propose(_targets, _values, _calldatas, "Override a veto");
   }
 
-  function _castVote(uint256 _proposalId, address _voter, uint8 _support) internal {
+  // Skips voters with no votes, since the governor rejects a vote with no weight and tests may leave a side at zero.
+  function _castVoteIfHasVotes(uint256 _proposalId, address _voter, uint8 _support) internal {
     if (token.getVotes(_voter) == 0) {
       return;
     }
@@ -56,18 +59,18 @@ contract ZkProtocolGovernorSupermajorityTest is Test {
     governor.castVote(_proposalId, _support);
   }
 
-  /// @notice Proposes, has one delegate split its weight across AGAINST, FOR and ABSTAIN with a fractional vote, and
+  /// @notice Proposes, has `splitVoter` split its weight across AGAINST, FOR and ABSTAIN with a fractional vote, and
   /// returns the proposal's state after voting ends.
   function _stateAfterSplitVote(uint128 _forVotes, uint128 _againstVotes, uint128 _abstainVotes)
     internal
     returns (IGovernor.ProposalState)
   {
-    _giveVotes(forVoter, uint256(_forVotes) + _againstVotes + _abstainVotes);
+    _mintAndSelfDelegateVotes(splitVoter, uint256(_forVotes) + _againstVotes + _abstainVotes);
     vm.warp(block.timestamp + 1);
 
     uint256 _proposalId = _propose();
     vm.warp(governor.proposalSnapshot(_proposalId) + 1);
-    vm.prank(forVoter);
+    vm.prank(splitVoter);
     governor.castVoteWithReasonAndParams(
       _proposalId, FOR, "", abi.encodePacked(_againstVotes, _forVotes, _abstainVotes)
     );
@@ -80,16 +83,16 @@ contract ZkProtocolGovernorSupermajorityTest is Test {
     internal
     returns (IGovernor.ProposalState)
   {
-    _giveVotes(forVoter, _forVotes);
-    _giveVotes(againstVoter, _againstVotes);
-    _giveVotes(abstainVoter, _abstainVotes);
+    _mintAndSelfDelegateVotes(forVoter, _forVotes);
+    _mintAndSelfDelegateVotes(againstVoter, _againstVotes);
+    _mintAndSelfDelegateVotes(abstainVoter, _abstainVotes);
     vm.warp(block.timestamp + 1);
 
     uint256 _proposalId = _propose();
     vm.warp(governor.proposalSnapshot(_proposalId) + 1);
-    _castVote(_proposalId, forVoter, FOR);
-    _castVote(_proposalId, againstVoter, AGAINST);
-    _castVote(_proposalId, abstainVoter, ABSTAIN);
+    _castVoteIfHasVotes(_proposalId, forVoter, FOR);
+    _castVoteIfHasVotes(_proposalId, againstVoter, AGAINST);
+    _castVoteIfHasVotes(_proposalId, abstainVoter, ABSTAIN);
     vm.warp(governor.proposalDeadline(_proposalId) + 1);
     return governor.state(_proposalId);
   }
