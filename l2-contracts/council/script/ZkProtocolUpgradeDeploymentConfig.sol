@@ -20,15 +20,13 @@ abstract contract ZkProtocolUpgradeDeploymentConfig {
     // CouncilERC20. Each member is minted exactly one seat, which is also the per-member maximum.
     string councilTokenName;
     string councilTokenSymbol;
-    uint256 councilSeat;
+    uint256 votesPerCouncilSeat;
     address[] councilMembers;
-    // ZkProtocolUpgradeCouncilGovernor. Quorum and super-quorum are percentages of the seat supply.
+    // ZkProtocolUpgradeCouncilGovernor. Its quorum and super-quorum are fixed at one seat.
     string councilGovernorName;
     uint48 councilGovernorVotingDelay;
     uint32 councilGovernorVotingPeriod;
     uint256 councilGovernorProposalThreshold;
-    uint256 councilGovernorQuorumFraction;
-    uint256 councilGovernorSuperQuorumFraction;
     // ZkProtocolUpgradeVetoGovernor. The extension threshold is a percentage of the veto threshold.
     string vetoGovernorName;
     uint48 vetoGovernorVotingDelay;
@@ -36,7 +34,7 @@ abstract contract ZkProtocolUpgradeDeploymentConfig {
     uint256 vetoGovernorProposalThreshold;
     uint256 vetoGovernorVetoThreshold;
     uint48 vetoGovernorVotingPeriodExtension;
-    uint16 vetoGovernorExtensionThresholdPct;
+    uint16 vetoGovernorVotingPeriodExtensionThresholdPct;
     address vetoGovernorVetoGuardian;
     uint48 vetoGovernorVetoOverrideDuration;
     // The Supermajority Governor (`ZkProtocolGovernor`); the types match its constructor.

@@ -59,15 +59,15 @@ contract Run is DeploySupermajorityGovernorTest {
   }
 
   function test_ConfiguresTheOverrideTimelock() public {
-    assertEq(timelock.getMinDelay(), 1 days);
+    assertEq(timelock.getMinDelay(), OVERRIDE_TIMELOCK_MIN_DELAY);
     assertTrue(timelock.hasRole(timelock.PROPOSER_ROLE(), address(governor)));
     assertTrue(timelock.hasRole(timelock.CANCELLER_ROLE(), address(governor)));
     assertTrue(timelock.hasRole(timelock.EXECUTOR_ROLE(), address(0)));
-    assertTrue(timelock.hasRole(TIMELOCK_ADMIN_ROLE, address(timelock)));
+    assertTrue(timelock.hasRole(timelock.TIMELOCK_ADMIN_ROLE(), address(timelock)));
   }
 
   function test_LeavesTheDeployerNoTimelockRole() public {
-    assertFalse(timelock.hasRole(TIMELOCK_ADMIN_ROLE, DEFAULT_SENDER));
+    assertFalse(timelock.hasRole(timelock.TIMELOCK_ADMIN_ROLE(), DEFAULT_SENDER));
     assertFalse(timelock.hasRole(timelock.PROPOSER_ROLE(), DEFAULT_SENDER));
     assertFalse(timelock.hasRole(timelock.CANCELLER_ROLE(), DEFAULT_SENDER));
     assertFalse(timelock.hasRole(timelock.EXECUTOR_ROLE(), DEFAULT_SENDER));

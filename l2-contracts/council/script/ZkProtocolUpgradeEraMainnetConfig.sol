@@ -38,15 +38,13 @@ abstract contract ZkProtocolUpgradeEraMainnetConfig is ZkProtocolUpgradeDeployme
       governanceAdmin: GOVERNANCE_ADMIN,
       councilTokenName: "ZKsync Protocol Upgrade Council Seat",
       councilTokenSymbol: "ZKPUC",
-      councilSeat: 1e18,
+      votesPerCouncilSeat: 1e18,
       councilMembers: _councilMembers,
       councilGovernorName: "ZKsync Protocol Upgrade Council",
       councilGovernorVotingDelay: 1 days,
       councilGovernorVotingPeriod: 3 days,
+      // One seat, so any member can propose.
       councilGovernorProposalThreshold: 1e18,
-      // 12% of eight seats is less than one seat, so a single FOR vote meets both quorum and super-quorum.
-      councilGovernorQuorumFraction: 12,
-      councilGovernorSuperQuorumFraction: 12,
       vetoGovernorName: "ZKsync Protocol Upgrade Veto Governor",
       vetoGovernorVotingDelay: 1 days,
       vetoGovernorVotingPeriod: 7 days,
@@ -55,7 +53,7 @@ abstract contract ZkProtocolUpgradeEraMainnetConfig is ZkProtocolUpgradeDeployme
       vetoGovernorVetoThreshold: 630_000_000e18,
       vetoGovernorVotingPeriodExtension: 2 days,
       // 50% of the 630M ZK veto threshold is 315M ZK.
-      vetoGovernorExtensionThresholdPct: 50,
+      vetoGovernorVotingPeriodExtensionThresholdPct: 50,
       vetoGovernorVetoGuardian: 0xF197677d63BF6E2841F5108b8dFd2FD6eCEff74B,
       vetoGovernorVetoOverrideDuration: 14 days,
       supermajorityGovernorName: "ZKsync Supermajority Governor",

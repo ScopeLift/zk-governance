@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Script, console2} from "forge-std/Script.sol";
 import {VmSafe} from "forge-std/Vm.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
+import {DeployBase} from "council/script/DeployBase.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "council/script/ZkProtocolUpgradeDeploymentConfig.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgradeEraMainnetConfig.sol";
 
@@ -21,10 +21,9 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgrad
 // The governor needs the timelock's address and the timelock needs the governor as its proposer, so the timelock is
 // deployed with the deployer as a temporary admin. The deployer grants the governor the proposer and canceller roles
 // and then renounces the admin role, leaving the timelock administered only by itself.
-abstract contract DeploySupermajorityGovernor is Script, ZkProtocolUpgradeDeploymentConfig {
+abstract contract DeploySupermajorityGovernor is DeployBase, ZkProtocolUpgradeDeploymentConfig {
   ZkProtocolGovernor public governor;
   TimelockController public timelock;
-  bool internal isLogging = true;
 
   function run() public virtual {
     DeploymentParams memory _params = _deploymentParams();
@@ -77,16 +76,6 @@ abstract contract DeploySupermajorityGovernor is Script, ZkProtocolUpgradeDeploy
     _log(string.concat("Override TimelockController (OVERRIDE_TIMELOCK): ", vm.toString(address(timelock))));
   }
 
-  function disableLogging() public {
-    isLogging = false;
-  }
-
-  function _log(string memory _msg) internal view {
-    if (isLogging) {
-      console2.log(_msg);
-    }
-  }
-
   function _logDeploymentParams(DeploymentParams memory _params) internal view {
     _log("Deploying the Supermajority Governor with:");
     _log(string.concat("  token:                    ", vm.toString(_params.zkToken)));
@@ -104,12 +93,6 @@ abstract contract DeploySupermajorityGovernor is Script, ZkProtocolUpgradeDeploy
   function _validateDeploymentParams(DeploymentParams memory _params) internal view {
     if (_params.zkToken.code.length == 0) {
       revert("DeploySupermajorityGovernor: token has no code; set it to the ZK token");
-    }
-    if (_params.supermajorityGovernorQuorum == 0) {
-      revert("DeploySupermajorityGovernor: quorum is zero; set it to the supermajority quorum");
-    }
-    if (_params.overrideTimelockMinDelay == 0) {
-      revert("DeploySupermajorityGovernor: overrideTimelockMinDelay is zero; set the override timelock delay");
     }
   }
 
@@ -164,10 +147,6 @@ abstract contract DeploySupermajorityGovernor is Script, ZkProtocolUpgradeDeploy
     ) {
       revert("DeploySupermajorityGovernor: the deployer kept a role on the override timelock");
     }
-  }
-
-  function _eq(string memory _a, string memory _b) internal pure returns (bool) {
-    return keccak256(bytes(_a)) == keccak256(bytes(_b));
   }
 }
 
