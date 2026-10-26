@@ -7,7 +7,9 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 
 // Generates the `ZkProtocolGovernor` proposal that moves the proposer, executor and canceller roles on the Protocol
 // Timelock to `ZkProtocolUpgradeVetoGovernor`, and an execution manifest describing it. Nothing is broadcast: the
-// proposal is submitted separately, e.g. through Tally, with the calldata this script prints.
+// proposal is submitted separately with the `propose` calldata this script prints. Submit that calldata unchanged:
+// the proposal ID depends on the exact description, so a proposal whose description a UI reformats gets a different ID
+// and fails `checkReadyToExecute`.
 //
 // `run` checks that the deployment is fully configured and that the roles have not moved yet, simulates the proposal's
 // execution against the live chain state, checks the result, and writes the manifest. It lists, but does not fail on,
@@ -17,11 +19,11 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 // yet. It also fails unless the migration proposal has passed on `ZkProtocolGovernor`, and if any other
 // `ZkProtocolGovernor` proposal is still in flight, since executing the migration would strand it.
 abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMigration {
-  // The directory the script may write to, as allowed by `fs_permissions` in `foundry.toml`.
+  // The directory the manifest is written to, which `fs_permissions` in `foundry.toml` lets the script write.
   string internal constant MANIFEST_DIR = "proposals";
 
-  // Where the manifest is written unless `MANIFEST_PATH` is set.
-  string internal constant DEFAULT_MANIFEST_PATH = "proposals/protocol-timelock-role-migration.json";
+  // The manifest's file name in `MANIFEST_DIR` unless `MANIFEST_FILE` is set.
+  string internal constant DEFAULT_MANIFEST_FILE = "protocol-timelock-role-migration.json";
 
   // Generates, simulates and checks the migration proposal, and writes its execution manifest.
   function run() public virtual {
@@ -30,7 +32,9 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
 
     Proposal memory _proposal = _migrationProposal(_vetoGovernor);
     uint256 _proposalId = _hashProposal(_proposal);
-    uint256[] memory _inFlight = _inFlightProposals(_proposalId);
+    uint256[] memory _proposalIds = _protocolGovernorProposalIds();
+    uint256[] memory _inFlight = _inFlightProposals(_proposalIds, _proposalId);
+    _logIfAlreadyProposed(_proposalIds, _proposalId);
 
     _simulateMigration(_proposal);
     _checkAfterMigration(_vetoGovernor);
@@ -54,7 +58,7 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
     Proposal memory _proposal = _migrationProposal(_vetoGovernor);
     uint256 _proposalId = _hashProposal(_proposal);
     _checkMigrationProposalPassed(_proposalId);
-    uint256[] memory _inFlight = _inFlightProposals(_proposalId);
+    uint256[] memory _inFlight = _inFlightProposals(_protocolGovernorProposalIds(), _proposalId);
     _logInFlight(_inFlight);
     if (_inFlight.length != 0) {
       revert(
@@ -70,9 +74,28 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
     _log("Ready to execute: all migration checks passed");
   }
 
-  // Where the manifest is written, `MANIFEST_PATH` if set.
-  function _manifestPath() internal view virtual returns (string memory) {
-    return vm.envOr("MANIFEST_PATH", DEFAULT_MANIFEST_PATH);
+  // The manifest's file name in `MANIFEST_DIR`, `MANIFEST_FILE` if set.
+  function _manifestFileName() internal view virtual returns (string memory) {
+    return vm.envOr("MANIFEST_FILE", DEFAULT_MANIFEST_FILE);
+  }
+
+  // Notes when the migration proposal already exists on `ZkProtocolGovernor`, in which case proposing it again reverts.
+  function _logIfAlreadyProposed(uint256[] memory _proposalIds, uint256 _migrationProposalId) internal view {
+    string[8] memory _stateNames =
+      ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
+    for (uint256 _i = 0; _i < _proposalIds.length; _i += 1) {
+      if (_proposalIds[_i] == _migrationProposalId) {
+        IGovernor.ProposalState _state = IGovernor(_protocolGovernor()).state(_migrationProposalId);
+        _log(
+          string.concat(
+            "NOTE: the migration proposal already exists on ZkProtocolGovernor (",
+            _stateNames[uint8(_state)],
+            "); proposing it again reverts"
+          )
+        );
+        return;
+      }
+    }
   }
 
   function _proposeCalldata(Proposal memory _proposal) internal pure returns (bytes memory) {
@@ -124,7 +147,7 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
     }
     string memory _manifest = vm.serializeBytes32(_manifestKey, "inFlightProposalsAtGeneration", _inFlightIds);
 
-    _path = _manifestPath();
+    _path = string.concat(MANIFEST_DIR, "/", _manifestFileName());
     vm.createDir(MANIFEST_DIR, true);
     vm.writeJson(_manifest, _path);
   }
@@ -192,8 +215,8 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
 // Usage, from `l2-contracts/council`, with the deployed council governance's addresses and deployer in
 // `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`:
 // `forge script script/ProposeProtocolTimelockRoleMigration.s.sol:ProposeProtocolTimelockRoleMigrationEraMainnet
-// --zksync --rpc-url <era-rpc>`. Add `--sig "checkReadyToExecute()"` right before execution. `MANIFEST_PATH` optionally
-// overrides where the manifest is written, within `proposals/`. The RPC endpoint must serve historical logs, which
+// --zksync --rpc-url <era-rpc>`. Add `--sig "checkReadyToExecute()"` right before execution. `MANIFEST_FILE` optionally
+// names the manifest file written in `proposals/`. The RPC endpoint must serve historical logs, which
 // local forks usually do not.
 contract ProposeProtocolTimelockRoleMigrationEraMainnet is
   ProposeProtocolTimelockRoleMigration,

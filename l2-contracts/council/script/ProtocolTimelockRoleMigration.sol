@@ -208,10 +208,13 @@ abstract contract ProtocolTimelockRoleMigration is ZkProtocolUpgradeGovernanceCh
     _timelock.executeBatch(_proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), _salt);
   }
 
-  // Lists `ZkProtocolGovernor` proposals, other than the migration proposal, that still need the roles the migration
-  // revokes: those that are pending, active, succeeded or queued.
-  function _inFlightProposals(uint256 _migrationProposalId) internal returns (uint256[] memory _inFlightIds) {
-    uint256[] memory _proposalIds = _protocolGovernorProposalIds();
+  // Lists the `ZkProtocolGovernor` proposals among `_proposalIds`, other than the migration proposal, that still need
+  // the roles the migration revokes: those that are pending, active, succeeded or queued.
+  function _inFlightProposals(uint256[] memory _proposalIds, uint256 _migrationProposalId)
+    internal
+    view
+    returns (uint256[] memory _inFlightIds)
+  {
     _inFlightIds = new uint256[](_proposalIds.length);
     uint256 _count = 0;
     for (uint256 _i = 0; _i < _proposalIds.length; _i += 1) {

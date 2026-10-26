@@ -21,8 +21,8 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
   address vetoGovernor = makeAddr("Veto Governor");
   // The proposals the fake governor reports having created, in place of its `ProposalCreated` logs.
   uint256[] protocolGovernorProposalIds;
-  // Each test that writes a manifest uses its own path, since tests run in parallel.
-  string manifestPath;
+  // Each test that writes a manifest uses its own file, since tests run in parallel.
+  string manifestFileName;
 
   function setUp() public virtual {
     vm.warp(1_700_000_000);
@@ -60,8 +60,15 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
     return protocolGovernorProposalIds;
   }
 
-  function _manifestPath() internal view override returns (string memory) {
-    return manifestPath;
+  function _manifestFileName() internal view override returns (string memory) {
+    return manifestFileName;
+  }
+
+  // Reads the manifest a test's run wrote, and removes the file.
+  function _readAndRemoveManifest() internal returns (string memory _manifest) {
+    string memory _path = string.concat(MANIFEST_DIR, "/", manifestFileName);
+    _manifest = vm.readFile(_path);
+    vm.removeFile(_path);
   }
 
   // Records a `ZkProtocolGovernor` proposal other than the migration, in a given state.
@@ -112,13 +119,12 @@ contract MigrationProposal is ProposeProtocolTimelockRoleMigrationTest {
 
 contract Run is ProposeProtocolTimelockRoleMigrationTest {
   function test_WritesAManifestOfTheProposalAndSimulatesItsExecution() public {
-    manifestPath = "proposals/test-run-writes-a-manifest.json";
+    manifestFileName = "test-run-writes-a-manifest.json";
 
     run();
 
     Proposal memory _proposal = _migrationProposal(vetoGovernor);
-    string memory _manifest = vm.readFile(manifestPath);
-    vm.removeFile(manifestPath);
+    string memory _manifest = _readAndRemoveManifest();
     assertEq(vm.parseJsonBytes32(_manifest, ".proposalId"), bytes32(_hashProposal(_proposal)));
     assertEq(vm.parseJsonBytes32(_manifest, ".timelockOperationId"), _timelockOperationId(_proposal));
     assertEq(vm.parseJsonAddress(_manifest, ".vetoGovernor"), vetoGovernor);
@@ -127,14 +133,13 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
   }
 
   function test_RecordsButDoesNotFailOnOtherProposalsInFlight() public {
-    manifestPath = "proposals/test-run-records-proposals-in-flight.json";
+    manifestFileName = "test-run-records-proposals-in-flight.json";
     _addProtocolGovernorProposal(1, IGovernor.ProposalState.Active);
     _addProtocolGovernorProposal(2, IGovernor.ProposalState.Executed);
 
     run();
 
-    string memory _manifest = vm.readFile(manifestPath);
-    vm.removeFile(manifestPath);
+    string memory _manifest = _readAndRemoveManifest();
     bytes32[] memory _inFlight = vm.parseJsonBytes32Array(_manifest, ".inFlightProposalsAtGeneration");
     assertEq(_inFlight.length, 1);
     assertEq(_inFlight[0], bytes32(uint256(1)));
@@ -215,6 +220,14 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
     vm.expectRevert(
       "ProtocolTimelockRoleMigration: ZkProtocolGovernor is missing a Protocol Timelock role it should hold"
     );
+    this.checkReadyToExecute();
+  }
+
+  function test_RevertIf_AGovernorWouldAdministerTheTimelockAfterTheMigration() public {
+    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
+    protocolTimelock.grantRole(TIMELOCK_ADMIN_ROLE, vetoGovernor);
+
+    vm.expectRevert("ProtocolTimelockRoleMigration: a governor administers the Protocol Timelock");
     this.checkReadyToExecute();
   }
 
