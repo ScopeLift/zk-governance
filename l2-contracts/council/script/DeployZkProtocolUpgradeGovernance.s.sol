@@ -93,6 +93,9 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     if (_params.councilMembers.length == 0) {
       revert("DeployZkProtocolUpgradeGovernance: councilMembers is empty");
     }
+    if (_params.vetoGovernorVetoGuardian == address(0)) {
+      revert("DeployZkProtocolUpgradeGovernance: vetoGovernorVetoGuardian is the zero address; set the veto guardian");
+    }
     if (_params.councilGovernorProposalThreshold > _params.votesPerCouncilSeat) {
       revert(
         "DeployZkProtocolUpgradeGovernance: councilGovernorProposalThreshold is above one seat; no member could propose"

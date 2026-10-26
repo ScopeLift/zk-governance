@@ -38,18 +38,16 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     internal
     view
   {
-    _validateCouncilToken(_params, _deployment, _deployer);
+    _validateCouncilToken(_params, _deployment);
     _validateCouncilGovernor(_params, _deployment);
-    _validateVetoGovernor(_params, _deployment);
+    _validateVetoGovernor(_params, _deployment, _deployer);
     _validateStepOneContracts(
       _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _deployer
     );
   }
 
-  function _validateCouncilToken(DeploymentParams memory _params, Deployment memory _deployment, address _deployer)
-    internal
-    view
-  {
+  // The supply check means no account outside `councilMembers`, the deployer included, holds a seat.
+  function _validateCouncilToken(DeploymentParams memory _params, Deployment memory _deployment) internal view {
     CouncilERC20 _token = _deployment.councilToken;
     address[] memory _members = _params.councilMembers;
 
@@ -82,9 +80,6 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
         );
       }
     }
-    if (_token.balanceOf(_deployer) != 0) {
-      revert("ZkProtocolUpgradeGovernanceChecks: the deployer holds a council seat");
-    }
   }
 
   function _validateCouncilGovernor(DeploymentParams memory _params, Deployment memory _deployment) internal view {
@@ -116,7 +111,10 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     }
   }
 
-  function _validateVetoGovernor(DeploymentParams memory _params, Deployment memory _deployment) internal view {
+  function _validateVetoGovernor(DeploymentParams memory _params, Deployment memory _deployment, address _deployer)
+    internal
+    view
+  {
     ZkProtocolUpgradeVetoGovernor _governor = _deployment.vetoGovernor;
 
     if (!_eq(_governor.name(), _params.vetoGovernorName)) {
@@ -124,6 +122,10 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     }
     if (address(_governor.token()) != _params.zkToken) {
       revert("ZkProtocolUpgradeGovernanceChecks: veto governor token is not the ZK token");
+    }
+    // Every duration in the params is in seconds, which holds only for a timestamp clock.
+    if (!_eq(_governor.CLOCK_MODE(), "mode=timestamp")) {
+      revert("ZkProtocolUpgradeGovernanceChecks: veto governor does not use a timestamp clock");
     }
     if (_governor.COUNCIL() != address(_deployment.councilGovernor)) {
       revert("ZkProtocolUpgradeGovernanceChecks: veto governor council is not the Council Governor");
@@ -154,6 +156,9 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     }
     if (_governor.vetoGuardian() != _params.vetoGovernorVetoGuardian) {
       revert("ZkProtocolUpgradeGovernanceChecks: veto governor veto guardian does not match the params");
+    }
+    if (_governor.vetoGuardian() == _deployer) {
+      revert("ZkProtocolUpgradeGovernanceChecks: the deployer is the veto guardian");
     }
     if (_governor.vetoOverrideRole() != address(_deployment.overrideTimelock)) {
       revert("ZkProtocolUpgradeGovernanceChecks: veto governor veto override role is not the override timelock");

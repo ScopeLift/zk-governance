@@ -28,11 +28,14 @@ contract DeploySupermajorityGovernorTest is Test, DeploySupermajorityGovernorEra
 
   // Voting in the end-to-end test needs a token with code, so the mainnet ZK token is replaced by a fake.
   ERC20VotesFake token;
+  // When set, the params use an account without code as the ZK token.
+  bool useTokenWithoutCode;
+  // When set, the params' veto override window is cut to exactly a supermajority override's length.
+  bool shortenVetoOverrideWindow;
 
-  function setUp() public {
+  function setUp() public virtual {
     token = new ERC20VotesFake();
     disableLogging();
-    run();
   }
 
   function _deploymentParams()
@@ -43,10 +46,21 @@ contract DeploySupermajorityGovernorTest is Test, DeploySupermajorityGovernorEra
   {
     _params = ZkProtocolUpgradeEraMainnetConfig._deploymentParams();
     _params.zkToken = address(token);
+    if (useTokenWithoutCode) {
+      _params.zkToken = address(uint160(uint256(keccak256("Account Without Code"))));
+    }
+    if (shortenVetoOverrideWindow) {
+      _params.vetoGovernorVetoOverrideDuration = 12 days;
+    }
   }
 }
 
 contract Run is DeploySupermajorityGovernorTest {
+  function setUp() public override {
+    super.setUp();
+    run();
+  }
+
   function test_DeploysTheGovernorWithTheZipParameters() public {
     assertEq(governor.name(), "ZKsync Supermajority Governor");
     assertEq(address(governor.token()), address(token));
@@ -108,10 +122,30 @@ contract Run is DeploySupermajorityGovernorTest {
 
 contract Check is DeploySupermajorityGovernorTest {
   function test_PassesForTheDeploymentRunMade() public {
+    run();
     vm.setEnv("SUPERMAJORITY_GOVERNOR", vm.toString(address(governor)));
     vm.setEnv("OVERRIDE_TIMELOCK", vm.toString(address(timelock)));
     vm.setEnv("DEPLOYER", vm.toString(DEFAULT_SENDER));
 
     check();
+  }
+}
+
+// `vm.expectRevert` applies to the next external call, so these tests call `run` through `this`.
+contract RunReverts is DeploySupermajorityGovernorTest {
+  function test_RevertIf_TheZkTokenHasNoCode() public {
+    useTokenWithoutCode = true;
+
+    vm.expectRevert("SupermajorityGovernorChecks: zkToken has no code; set it to the ZK token");
+    this.run();
+  }
+
+  function test_RevertIf_TheVetoOverrideWindowIsNoLongerThanASupermajorityOverride() public {
+    shortenVetoOverrideWindow = true;
+
+    vm.expectRevert(
+      "SupermajorityGovernorChecks: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
+    );
+    this.run();
   }
 }

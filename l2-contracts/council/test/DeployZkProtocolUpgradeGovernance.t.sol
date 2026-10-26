@@ -18,28 +18,30 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
   TimelockController protocolTimelock;
   TimelockController overrideTimelock;
   FakeSupermajorityGovernor supermajorityGovernor;
-  // When set, the params' veto override window is cut to one day, shorter than a supermajority override takes.
+  // When set, the params' veto override window is cut to exactly a supermajority override's length, which leaves no
+  // time to queue and execute it.
   bool shortenVetoOverrideWindow;
+  // When set, the params leave the Veto Governor without a veto guardian.
+  bool omitVetoGuardian;
 
   function setUp() public virtual {
     zkToken = new FakeVotesToken();
     protocolTimelock = new TimelockController(0, new address[](0), new address[](0), address(this));
-    _deployStepOneAs(address(this));
+    _deployStepOne();
     disableLogging();
   }
 
   // Deploys the override timelock and Supermajority Governor as step 1 leaves them: the governor proposes and cancels,
-  // anyone executes, and the timelock administers itself. `_admin` deploys them and keeps OpenZeppelin v5's admin role.
-  function _deployStepOneAs(address _admin) internal {
+  // anyone executes, and the timelock administers itself. The test contract keeps OpenZeppelin v5's admin role, so
+  // tests can grant extra roles; it is not the deployer the checks look at.
+  function _deployStepOne() internal {
     address[] memory _openExecutor = new address[](1);
-    overrideTimelock = new TimelockController(1 days, new address[](0), _openExecutor, _admin);
+    overrideTimelock = new TimelockController(1 days, new address[](0), _openExecutor, address(this));
     supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(address(overrideTimelock)));
-    vm.startPrank(_admin);
     overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), address(supermajorityGovernor));
     overrideTimelock.grantRole(overrideTimelock.CANCELLER_ROLE(), address(supermajorityGovernor));
     // The real override timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, address(overrideTimelock));
-    vm.stopPrank();
   }
 
   // The settings step 1 gives the Supermajority Governor, from the same params step 2 checks it against.
@@ -77,7 +79,10 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     _params.zkToken = address(zkToken);
     _params.protocolTimelock = address(protocolTimelock);
     if (shortenVetoOverrideWindow) {
-      _params.vetoGovernorVetoOverrideDuration = 1 days;
+      _params.vetoGovernorVetoOverrideDuration = 12 days;
+    }
+    if (omitVetoGuardian) {
+      _params.vetoGovernorVetoGuardian = address(0);
     }
   }
 }
@@ -178,6 +183,15 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     this.run();
   }
 
+  function test_RevertIf_TheVetoGuardianIsTheZeroAddress() public {
+    omitVetoGuardian = true;
+
+    vm.expectRevert(
+      "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoGuardian is the zero address; set the veto guardian"
+    );
+    this.run();
+  }
+
   function test_RevertIf_TheProtocolTimelockHasNoCode() public {
     protocolTimelock = TimelockController(payable(makeAddr("Account Without Code")));
 
@@ -185,10 +199,17 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     this.run();
   }
 
-  function test_RevertIf_TheDeployerHoldsARoleOnTheOverrideTimelock() public {
-    _deployStepOneAs(DEFAULT_SENDER);
-    vm.prank(DEFAULT_SENDER);
+  // The real override timelock is OpenZeppelin v4, so the v4 admin role is checked on its own.
+  function test_RevertIf_TheDeployerHoldsTheV4AdminRoleOnTheOverrideTimelock() public {
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, DEFAULT_SENDER);
+
+    vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
+    this.run();
+  }
+
+  // A wrong OpenZeppelin v5 timelock still administered by the deployer is caught too.
+  function test_RevertIf_TheDeployerHoldsTheV5AdminRoleOnTheOverrideTimelock() public {
+    overrideTimelock.grantRole(bytes32(0), DEFAULT_SENDER);
 
     vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
     this.run();

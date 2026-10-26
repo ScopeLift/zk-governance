@@ -42,7 +42,9 @@ abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDe
     uint256 _longestOverride = uint256(_params.supermajorityGovernorVotingDelay)
       + _params.supermajorityGovernorVotingPeriod + _params.supermajorityGovernorLateQuorumVoteExtension
       + _params.overrideTimelockMinDelay;
-    if (_params.vetoGovernorVetoOverrideDuration < _longestOverride) {
+    // The override must also be queued and executed after the Supermajority Governor's vote ends, so the window has to
+    // be strictly longer.
+    if (_params.vetoGovernorVetoOverrideDuration <= _longestOverride) {
       revert("SupermajorityGovernorChecks: vetoGovernorVetoOverrideDuration is too short for a supermajority override");
     }
   }
