@@ -70,6 +70,11 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
     protocolGovernorProposalIds.push(_proposalId);
   }
 
+  // Sets the migration proposal's state on the fake `ZkProtocolGovernor`.
+  function _setMigrationProposalState(IGovernor.ProposalState _state) internal {
+    protocolGovernor.setState(_hashProposal(_migrationProposal(vetoGovernor)), _state);
+  }
+
   // Schedules the migration batch on the timelock, as `ZkProtocolGovernor` does when the proposal is queued.
   function _queueMigrationProposal() internal {
     Proposal memory _proposal = _migrationProposal(vetoGovernor);
@@ -137,13 +142,16 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
 }
 
 contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
-  function test_PassesBeforeTheMigrationProposalIsQueued() public {
+  function test_PassesOnceTheMigrationProposalSucceedsBeforeItIsQueued() public {
+    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
+
     checkReadyToExecute();
 
     _assertRolesMovedToTheVetoGovernor();
   }
 
   function test_PassesOnceTheMigrationProposalIsQueued() public {
+    _setMigrationProposalState(IGovernor.ProposalState.Queued);
     _queueMigrationProposal();
 
     checkReadyToExecute();
@@ -152,6 +160,7 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
   }
 
   function test_IgnoresProposalsThatCanNoLongerUseTheRoles() public {
+    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
     _addProtocolGovernorProposal(1, IGovernor.ProposalState.Defeated);
     _addProtocolGovernorProposal(2, IGovernor.ProposalState.Canceled);
     _addProtocolGovernorProposal(3, IGovernor.ProposalState.Executed);
@@ -161,17 +170,28 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
     _assertRolesMovedToTheVetoGovernor();
   }
 
-  function test_RevertIf_AnotherProposalIsInFlight() public {
-    _addProtocolGovernorProposal(7, IGovernor.ProposalState.Succeeded);
+  function test_RevertIf_OtherProposalsArePendingOrQueued() public {
+    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
+    _addProtocolGovernorProposal(7, IGovernor.ProposalState.Pending);
+    _addProtocolGovernorProposal(8, IGovernor.ProposalState.Queued);
 
     vm.expectRevert(
       bytes(
         string.concat(
           "ProposeProtocolTimelockRoleMigration: other ZkProtocolGovernor proposals are in flight: ",
-          vm.toString(bytes32(uint256(7)))
+          vm.toString(bytes32(uint256(7))),
+          ", ",
+          vm.toString(bytes32(uint256(8)))
         )
       )
     );
+    this.checkReadyToExecute();
+  }
+
+  function test_RevertIf_TheMigrationProposalHasNotPassed() public {
+    _setMigrationProposalState(IGovernor.ProposalState.Active);
+
+    vm.expectRevert("ProtocolTimelockRoleMigration: the migration proposal has not passed on ZkProtocolGovernor");
     this.checkReadyToExecute();
   }
 
@@ -179,6 +199,29 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
     protocolTimelock.grantRole(PROPOSER_ROLE, vetoGovernor);
 
     vm.expectRevert("ProtocolTimelockRoleMigration: the Veto Governor already holds a Protocol Timelock role");
+    this.checkReadyToExecute();
+  }
+
+  function test_RevertIf_ZkProtocolGovernorDoesNotUseTheProtocolTimelock() public {
+    protocolGovernor = new FakeProtocolGovernor(makeAddr("Other Timelock"));
+
+    vm.expectRevert("ProtocolTimelockRoleMigration: ZkProtocolGovernor does not use the Protocol Timelock");
+    this.checkReadyToExecute();
+  }
+
+  function test_RevertIf_ZkProtocolGovernorIsMissingARole() public {
+    protocolTimelock.revokeRole(EXECUTOR_ROLE, address(protocolGovernor));
+
+    vm.expectRevert(
+      "ProtocolTimelockRoleMigration: ZkProtocolGovernor is missing a Protocol Timelock role it should hold"
+    );
+    this.checkReadyToExecute();
+  }
+
+  function test_RevertIf_ARoleIsOpenToEveryAccount() public {
+    protocolTimelock.grantRole(CANCELLER_ROLE, address(0));
+
+    vm.expectRevert("ProtocolTimelockRoleMigration: a Protocol Timelock role is open to every account");
     this.checkReadyToExecute();
   }
 }

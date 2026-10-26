@@ -14,9 +14,8 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 // other `ZkProtocolGovernor` proposals still in flight, since those may finish before the migration executes.
 //
 // `checkReadyToExecute` repeats the checks just before the migration proposal executes, whether or not it is queued
-// yet, and also fails if any other `ZkProtocolGovernor` proposal is still in flight, since executing the migration
-// would
-// strand it.
+// yet. It also fails unless the migration proposal has passed on `ZkProtocolGovernor`, and if any other
+// `ZkProtocolGovernor` proposal is still in flight, since executing the migration would strand it.
 abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMigration {
   // The directory the script may write to, as allowed by `fs_permissions` in `foundry.toml`.
   string internal constant MANIFEST_DIR = "proposals";
@@ -53,7 +52,9 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
     _checkBeforeMigration(_vetoGovernor);
 
     Proposal memory _proposal = _migrationProposal(_vetoGovernor);
-    uint256[] memory _inFlight = _inFlightProposals(_hashProposal(_proposal));
+    uint256 _proposalId = _hashProposal(_proposal);
+    _checkMigrationProposalPassed(_proposalId);
+    uint256[] memory _inFlight = _inFlightProposals(_proposalId);
     _logInFlight(_inFlight);
     if (_inFlight.length != 0) {
       revert(

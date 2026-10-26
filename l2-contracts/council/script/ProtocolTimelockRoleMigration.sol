@@ -144,6 +144,15 @@ abstract contract ProtocolTimelockRoleMigration is ZkProtocolUpgradeGovernanceCh
     _checkProtocolTimelockSettings();
   }
 
+  // Checks that the migration proposal exists on `ZkProtocolGovernor` with the ID built here, and has passed: it is
+  // succeeded and not yet queued, or queued. Any difference in its actions or description would give it another ID.
+  function _checkMigrationProposalPassed(uint256 _migrationProposalId) internal view {
+    IGovernor.ProposalState _state = IGovernor(_protocolGovernor()).state(_migrationProposalId);
+    if (_state != IGovernor.ProposalState.Succeeded && _state != IGovernor.ProposalState.Queued) {
+      revert("ProtocolTimelockRoleMigration: the migration proposal has not passed on ZkProtocolGovernor");
+    }
+  }
+
   // Checks the state the migration ends in: the Veto Governor holds the three roles, `ZkProtocolGovernor` holds none,
   // neither administers the timelock, and the timelock still administers itself with no delay.
   function _checkAfterMigration(address _vetoGovernor) internal view {
@@ -166,7 +175,8 @@ abstract contract ProtocolTimelockRoleMigration is ZkProtocolUpgradeGovernanceCh
     _checkProtocolTimelockSettings();
   }
 
-  // Checks the Protocol Timelock settings the migration leaves unchanged: no minimum delay, and self-administration.
+  // Checks the Protocol Timelock settings the migration leaves unchanged: no minimum delay, self-administration, and
+  // none of the three roles open to every account.
   function _checkProtocolTimelockSettings() internal view {
     TimelockController _timelock = _protocolTimelock();
     if (_timelock.getMinDelay() != 0) {
@@ -174,6 +184,12 @@ abstract contract ProtocolTimelockRoleMigration is ZkProtocolUpgradeGovernanceCh
     }
     if (!_timelock.hasRole(TIMELOCK_ADMIN_ROLE, address(_timelock))) {
       revert("ProtocolTimelockRoleMigration: the Protocol Timelock does not administer itself");
+    }
+    bytes32[3] memory _roles = _migratedRoles();
+    for (uint256 _i = 0; _i < 3; _i += 1) {
+      if (_timelock.hasRole(_roles[_i], address(0))) {
+        revert("ProtocolTimelockRoleMigration: a Protocol Timelock role is open to every account");
+      }
     }
   }
 
