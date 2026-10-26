@@ -277,6 +277,43 @@ contract State is ZkProtocolUpgradeVetoGovernorTest {
     _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
   }
 
+  function testFuzz_UsesARaisedVetoThresholdSetBeforeTheProposalSnapshot(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold
+  ) public {
+    // AGAINST votes equal to the initial threshold fall short of the new, higher threshold, which applies.
+    _initialVetoThreshold = _bound(_initialVetoThreshold, 1, MAX_VETO_THRESHOLD - 1);
+    _newVetoThreshold = _bound(_newVetoThreshold, _initialVetoThreshold + 1, MAX_VETO_THRESHOLD);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    _mintAndSelfDelegateVotes(voter, _initialVetoThreshold);
+    uint256 _proposalId = _proposeFromCouncil(_governor);
+
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+    _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
+    _jumpPastTheProposalDeadline(_governor, _proposalId);
+
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Succeeded);
+  }
+
+  function testFuzz_IgnoresALoweredVetoThresholdSetAfterTheProposalSnapshot(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold
+  ) public {
+    // AGAINST votes equal to the new, lower threshold fall short of the initial threshold, which still applies.
+    _initialVetoThreshold = _bound(_initialVetoThreshold, 2, MAX_VETO_THRESHOLD);
+    _newVetoThreshold = _bound(_newVetoThreshold, 1, _initialVetoThreshold - 1);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    _mintAndSelfDelegateVotes(voter, _newVetoThreshold);
+    uint256 _proposalId = _proposeFromCouncil(_governor);
+
+    vm.warp(_governor.proposalSnapshot(_proposalId) + 1);
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
+    _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
+    _jumpPastTheProposalDeadline(_governor, _proposalId);
+
+    _assertState(_governor, _proposalId, IGovernor.ProposalState.Succeeded);
+  }
+
   function testFuzz_KeepsTheVetoThresholdInForceAtTheProposalSnapshot(
     uint256 _initialVetoThreshold,
     uint256 _newVetoThreshold
@@ -309,6 +346,27 @@ contract ProposalDeadline is ZkProtocolUpgradeVetoGovernorTest {
     uint256 _proposalId = _proposeFromCouncil(_governor);
     uint256 _originalDeadline = _governor.proposalDeadline(_proposalId);
 
+    _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
+
+    assertEq(_governor.proposalDeadline(_proposalId), _originalDeadline + VOTING_PERIOD_EXTENSION);
+  }
+
+  function testFuzz_ExtendsAtTheShareOfTheVetoThresholdInForceAtTheProposalSnapshot(
+    uint256 _initialVetoThreshold,
+    uint256 _newVetoThreshold
+  ) public {
+    // AGAINST votes at the initial threshold's extension share are below the raised threshold's share, so the deadline
+    // extends only if the snapshot's threshold applies.
+    _initialVetoThreshold = _bound(_initialVetoThreshold, 2, MAX_VETO_THRESHOLD / 4);
+    _newVetoThreshold = _bound(_newVetoThreshold, 4 * _initialVetoThreshold, MAX_VETO_THRESHOLD);
+    uint256 _againstVotes = _votingPeriodExtensionThreshold(_initialVetoThreshold);
+    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_initialVetoThreshold);
+    _mintAndSelfDelegateVotes(voter, _againstVotes);
+    uint256 _proposalId = _proposeFromCouncil(_governor);
+    uint256 _originalDeadline = _governor.proposalDeadline(_proposalId);
+
+    vm.warp(_governor.proposalSnapshot(_proposalId) + 1);
+    _setVetoThresholdAsAdmin(_governor, _newVetoThreshold);
     _castAgainstVoteOnceVotingOpens(_governor, _proposalId);
 
     assertEq(_governor.proposalDeadline(_proposalId), _originalDeadline + VOTING_PERIOD_EXTENSION);
