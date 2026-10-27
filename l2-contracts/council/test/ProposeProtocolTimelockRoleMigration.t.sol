@@ -23,6 +23,8 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
   address vetoGovernor = makeAddr("Veto Governor");
 
   function setUp() public virtual {
+    // A zero-delay operation scheduled at timestamp 1 would read as done, since the timelock marks done operations
+    // with timestamp 1.
     vm.warp(1_700_000_000);
     protocolTimelock = new TimelockController(0, new address[](0), new address[](0), address(this));
     protocolGovernor = new FakeProtocolGovernor(address(protocolTimelock));
