@@ -6,11 +6,22 @@ import {DeployBase} from "./DeployBase.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "./configs/ZkProtocolUpgradeDeploymentConfig.sol";
 import {IZkProtocolGovernor} from "./interfaces/IZkProtocolGovernor.sol";
 
-// Checks the Supermajority Governor and its override timelock against the params. `DeploySupermajorityGovernor` runs
-// these checks after deploying them, and `DeployZkProtocolUpgradeGovernance` runs them before deploying anything. Both
-// l2-contracts projects compile the same checks: the governor is read through an interface, and the timelock through
-// whichever OpenZeppelin `TimelockController` the project maps, v4 or v5, since the checks call only functions both
-// versions share.
+// Checks a deployed Supermajority Governor (`ZkProtocolGovernor`) and its override timelock against `DeploymentParams`:
+// the governor's settings, the timelock's delay, that the governor is the timelock's proposer and canceller, that
+// anyone can execute, that the timelock administers itself, and that the deployer holds no role on it. It also checks
+// that the params fit together.
+//
+// The Supermajority Governor and its timelock are OpenZeppelin v4 contracts, so `DeploySupermajorityGovernor` deploys
+// them from the main l2-contracts project. `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council`, which uses
+// OpenZeppelin v5, then makes that timelock the Veto Governor's `vetoOverrideRole`.
+//
+// `DeploySupermajorityGovernor` runs these checks on its own output after deploying. `DeployZkProtocolUpgradeGovernance`
+// runs them before broadcasting, because once the Veto Governor exists, replacing a wrong override timelock takes a
+// full governance proposal.
+//
+// Both l2-contracts projects compile the same checks: the governor is read through an interface, and the timelock
+// through whichever OpenZeppelin `TimelockController` the project maps, v4 or v5, since the checks call only functions
+// both versions share.
 abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDeploymentConfig {
   // Rejects params that would deploy a Supermajority Governor and override timelock in a form
   // `DeployZkProtocolUpgradeGovernance` can't use. Both deploy scripts run it before deploying, so
