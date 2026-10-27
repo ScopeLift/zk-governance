@@ -9,7 +9,8 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgrad
 
 // Step 1 of 2. Deploys the ZKsync Supermajority Governor and its override timelock. Step 2 is
 // `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council`, which deploys the council contracts and makes this
-// override timelock the Veto Governor's `vetoOverrideRole`. Both steps must use the same deployer account.
+// override timelock the Veto Governor's `vetoOverrideRole`. If step 2 is run from a different account, pass this
+// script's deployer to it as `STEP_ONE_DEPLOYER`.
 //
 // The Supermajority Governor is the existing `ZkProtocolGovernor`, deployed unchanged: its quorum counts FOR votes only
 // and a proposal succeeds only with more FOR than AGAINST votes, which are the ZIP's supermajority rules. It and the

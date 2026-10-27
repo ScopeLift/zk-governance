@@ -14,12 +14,14 @@ import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGoverna
 // Step 2 of 2. Deploys `CouncilERC20`, `ZkProtocolUpgradeCouncilGovernor` and `ZkProtocolUpgradeVetoGovernor`, wires
 // the Veto Governor to the override timelock from step 1, hands every admin role to the governance admin, and then
 // checks the whole deployment. Step 1 is `DeploySupermajorityGovernor` in the main l2-contracts project, which checks
-// the Supermajority Governor's own parameters. Both steps must use the same deployer account, since the checks confirm
-// it kept no privileges on any contract.
+// the Supermajority Governor's own parameters. The checks confirm that neither step's deployer kept privileges on any
+// contract. Step 1's deployer is read from `STEP_ONE_DEPLOYER`, which defaults to this script's broadcaster, and is
+// checked for leftover roles on the override timelock.
 //
-// `run` reads the step 1 addresses from the `SUPERMAJORITY_GOVERNOR` and `OVERRIDE_TIMELOCK` environment variables.
-// `check` runs the same checks against an existing deployment, reading `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`,
-// `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`.
+// `run` reads the step 1 addresses from the `SUPERMAJORITY_GOVERNOR` and `OVERRIDE_TIMELOCK` environment variables, and
+// optionally `STEP_ONE_DEPLOYER`. `check` runs the same checks against an existing deployment, reading `COUNCIL_TOKEN`,
+// `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK`, `DEPLOYER` and optionally
+// `STEP_ONE_DEPLOYER`, which defaults to `DEPLOYER`.
 //
 // The contracts reference each other, so they are deployed first and wired afterwards, rather than by predicting
 // addresses, which ZKsync Era derives differently from the EVM:
@@ -37,16 +39,18 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     Deployment memory _deployment;
     (_deployment.supermajorityGovernor, _deployment.overrideTimelock) = _stepOneContracts();
     _validateDeploymentParams(_params);
-    _logDeploymentParams(_params, _deployment);
 
     // The broadcasting account, read inside a broadcast so it is the deployer rather than the script contract.
     vm.startBroadcast();
     (, address _deployer,) = vm.readCallers();
     vm.stopBroadcast();
+    address _stepOneDeployerAccount = _stepOneDeployer(_deployer);
+    _logDeploymentParams(_params, _deployment, _stepOneDeployerAccount);
+
     // Fail before deploying anything if the step 1 contracts are wrong. Once the Veto Governor is deployed, replacing
     // its override timelock takes a full ZIP, since only the governance admin can call `setVetoOverrideRole`.
     _validateStepOneContracts(
-      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _deployer
+      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _stepOneDeployerAccount
     );
 
     vm.startBroadcast();
@@ -57,7 +61,7 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     _deployment.councilToken = councilToken;
     _deployment.councilGovernor = councilGovernor;
     _deployment.vetoGovernor = vetoGovernor;
-    _validateDeployment(_params, _deployment, _deployer);
+    _validateDeployment(_params, _deployment, _deployer, _stepOneDeployerAccount);
 
     _log(string.concat("CouncilERC20 (COUNCIL_TOKEN): ", vm.toString(address(councilToken))));
     _log(string.concat("ZkProtocolUpgradeCouncilGovernor (COUNCIL_GOVERNOR): ", vm.toString(address(councilGovernor))));
@@ -65,7 +69,8 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
   }
 
   function check() public view virtual {
-    _validateDeployment(_deploymentParams(), _deploymentFromEnv(), vm.envAddress("DEPLOYER"));
+    address _deployer = vm.envAddress("DEPLOYER");
+    _validateDeployment(_deploymentParams(), _deploymentFromEnv(), _deployer, _stepOneDeployer(_deployer));
     _log("All deployment checks passed");
   }
 
@@ -78,6 +83,11 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
   {
     _supermajorityGovernor = vm.envAddress("SUPERMAJORITY_GOVERNOR");
     _overrideTimelock = TimelockController(payable(vm.envAddress("OVERRIDE_TIMELOCK")));
+  }
+
+  // The account that ran step 1, read from `STEP_ONE_DEPLOYER`, or `_default` if it is unset.
+  function _stepOneDeployer(address _default) internal view virtual returns (address) {
+    return vm.envOr("STEP_ONE_DEPLOYER", _default);
   }
 
   // Rejects params that the deployment itself would accept but that leave the governance unusable. Mistakes that make
@@ -103,13 +113,18 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     }
   }
 
-  function _logDeploymentParams(DeploymentParams memory _params, Deployment memory _deployment) internal view {
+  function _logDeploymentParams(
+    DeploymentParams memory _params,
+    Deployment memory _deployment,
+    address _stepOneDeployerAccount
+  ) internal view {
     _log("Deploying the protocol upgrade council governance with:");
     _log(string.concat("  zkToken:               ", vm.toString(_params.zkToken)));
     _log(string.concat("  protocolTimelock:      ", vm.toString(_params.protocolTimelock)));
     _log(string.concat("  governanceAdmin:       ", vm.toString(_params.governanceAdmin)));
     _log(string.concat("  supermajorityGovernor: ", vm.toString(_deployment.supermajorityGovernor)));
     _log(string.concat("  overrideTimelock:      ", vm.toString(address(_deployment.overrideTimelock))));
+    _log(string.concat("  step 1 deployer:       ", vm.toString(_stepOneDeployerAccount)));
     _log(string.concat("  vetoThreshold:         ", vm.toString(_params.vetoGovernorVetoThreshold)));
     _log(string.concat("  council members:       ", vm.toString(_params.councilMembers.length)));
     for (uint256 _i = 0; _i < _params.councilMembers.length; _i += 1) {
@@ -201,7 +216,7 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
 // `--account`: `SUPERMAJORITY_GOVERNOR=<addr> OVERRIDE_TIMELOCK=<addr> forge script
 // script/DeployZkProtocolUpgradeGovernance.s.sol:DeployZkProtocolUpgradeGovernanceEraMainnet --zksync
 // --rpc-url <era-rpc> --broadcast`
-// Omit `--broadcast` for a dry run against the live chain state. Add `--sig "check()"` to check an existing deployment.
+// Also set `STEP_ONE_DEPLOYER=<addr>` if step 1 was run from a different account. Omit `--broadcast` for a dry run against the live chain state. Add `--sig "check()"` to check an existing deployment.
 contract DeployZkProtocolUpgradeGovernanceEraMainnet is
   DeployZkProtocolUpgradeGovernance,
   ZkProtocolUpgradeEraMainnetConfig

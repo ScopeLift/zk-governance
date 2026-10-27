@@ -33,16 +33,19 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     });
   }
 
-  // Runs every check against a deployment made by `_deployer`.
-  function _validateDeployment(DeploymentParams memory _params, Deployment memory _deployment, address _deployer)
-    internal
-    view
-  {
+  // Runs every check against a deployment whose council contracts were deployed by `_deployer` and whose Supermajority
+  // Governor and override timelock were deployed by `_stepOneDeployer`.
+  function _validateDeployment(
+    DeploymentParams memory _params,
+    Deployment memory _deployment,
+    address _deployer,
+    address _stepOneDeployer
+  ) internal view {
     _validateCouncilToken(_params, _deployment);
     _validateCouncilGovernor(_params, _deployment);
     _validateVetoGovernor(_params, _deployment, _deployer);
     _validateStepOneContracts(
-      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _deployer
+      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _stepOneDeployer
     );
   }
 
