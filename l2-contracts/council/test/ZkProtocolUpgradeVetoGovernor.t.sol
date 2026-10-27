@@ -18,6 +18,7 @@ contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers, Constants {
   address voter = makeAddr("Voter");
 
   function setUp() public virtual {
+    // Starts at an arbitrary but realistic Unix time (Nov 2023); no test depends on the exact value.
     vm.warp(1_700_000_000);
     token = new FakeVotesToken();
   }
