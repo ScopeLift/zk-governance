@@ -15,9 +15,9 @@ import {IZkProtocolGovernor} from "./interfaces/IZkProtocolGovernor.sol";
 // them from the main l2-contracts project. `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council`, which uses
 // OpenZeppelin v5, then makes that timelock the Veto Governor's `vetoOverrideRole`.
 //
-// `DeploySupermajorityGovernor` runs these checks on its own output after deploying. `DeployZkProtocolUpgradeGovernance`
-// runs them before broadcasting, because once the Veto Governor exists, replacing a wrong override timelock takes a
-// full governance proposal.
+// `DeploySupermajorityGovernor` runs these checks on its own output after deploying.
+// `DeployZkProtocolUpgradeGovernance` runs them before broadcasting, because once the Veto Governor exists, replacing a
+// wrong override timelock takes a full governance proposal.
 //
 // Both l2-contracts projects compile the same checks: the governor is read through an interface, and the timelock
 // through whichever OpenZeppelin `TimelockController` the project maps, v4 or v5, since the checks call only functions

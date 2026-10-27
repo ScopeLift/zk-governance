@@ -29,8 +29,7 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, ZkProtocolUpgradeEraMain
   string constant ZKSYNC_RPC_URL = "https://mainnet.era.zksync.io";
   // A fork block where the ZK token and the Protocol Timelock are both deployed.
   uint256 constant FORK_BLOCK = 72_650_000;
-  IAccountCodeStorage constant ACCOUNT_CODE_STORAGE =
-    IAccountCodeStorage(0x0000000000000000000000000000000000008002);
+  IAccountCodeStorage constant ACCOUNT_CODE_STORAGE = IAccountCodeStorage(0x0000000000000000000000000000000000008002);
 
   function setUp() public virtual {
     vm.createSelectFork(ZKSYNC_RPC_URL, FORK_BLOCK);
@@ -123,11 +122,7 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, ZkProtocolUpgradeEraMain
   // override timelock uses, v5's, which a wrong timelock might, and the proposer, canceller and executor roles.
   function _boundToTimelockRole(TimelockController _timelock, uint256 _roleIndex) internal view returns (bytes32) {
     bytes32[5] memory _roles = [
-      TIMELOCK_ADMIN_ROLE,
-      bytes32(0),
-      _timelock.PROPOSER_ROLE(),
-      _timelock.CANCELLER_ROLE(),
-      _timelock.EXECUTOR_ROLE()
+      TIMELOCK_ADMIN_ROLE, bytes32(0), _timelock.PROPOSER_ROLE(), _timelock.CANCELLER_ROLE(), _timelock.EXECUTOR_ROLE()
     ];
     return _roles[_bound(_roleIndex, 0, 4)];
   }
@@ -210,9 +205,7 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
     assertEq(_script.vetoGovernor().vetoOverrideRole(), address(_timelock));
   }
 
-  function testFuzz_RevertIf_TheOverrideTimelockDoesNotBelongToTheSupermajorityGovernor(address _otherTimelock)
-    public
-  {
+  function testFuzz_RevertIf_TheOverrideTimelockDoesNotBelongToTheSupermajorityGovernor(address _otherTimelock) public {
     DeploymentParams memory _params = _deploymentParams();
     TimelockController _timelock = _deployOverrideTimelock(_params);
     vm.assume(_otherTimelock != address(_timelock));

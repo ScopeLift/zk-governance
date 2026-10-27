@@ -10,8 +10,8 @@ import {ZkProtocolUpgradeCouncilGovernor} from "src/ZkProtocolUpgradeCouncilGove
 import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.sol";
 import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGovernanceChecks.sol";
 
-// Run after `DeploySupermajorityGovernor` in the main l2-contracts project, which deploys the Supermajority Governor and
-// its override timelock and checks their own parameters. Deploys `CouncilERC20`, `ZkProtocolUpgradeCouncilGovernor`
+// Run after `DeploySupermajorityGovernor` in the main l2-contracts project, which deploys the Supermajority Governor
+// and its override timelock and checks their own parameters. Deploys `CouncilERC20`, `ZkProtocolUpgradeCouncilGovernor`
 // and `ZkProtocolUpgradeVetoGovernor`, wires the Veto Governor to that override timelock, hands every admin role to the
 // governance admin, and then checks the whole deployment. The checks confirm that neither this script's deployer nor
 // the Supermajority Governor's deployer kept privileges on any contract. The Supermajority Governor's deployer is read
@@ -75,9 +75,7 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
 
   function check() public view virtual {
     address _deployer = vm.envAddress("DEPLOYER");
-    _validateDeployment(
-      _deploymentParams(), _deploymentFromEnv(), _deployer, _supermajorityGovernorDeployer(_deployer)
-    );
+    _validateDeployment(_deploymentParams(), _deploymentFromEnv(), _deployer, _supermajorityGovernorDeployer(_deployer));
     _log("All deployment checks passed");
   }
 
