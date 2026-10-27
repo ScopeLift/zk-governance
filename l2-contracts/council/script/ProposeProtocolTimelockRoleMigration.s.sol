@@ -84,8 +84,12 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
 
   // Runs every deployment check against the deployed council governance, reading its addresses and their deployer from
   // `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`.
+  // The Supermajority Governor's deployer is read from `SUPERMAJORITY_GOVERNOR_DEPLOYER`, which defaults to `DEPLOYER`.
   function _validateExistingDeployment() internal view virtual {
-    _validateDeployment(_deploymentParams(), _deploymentFromEnv(), vm.envAddress("DEPLOYER"));
+    address _deployer = vm.envAddress("DEPLOYER");
+    _validateDeployment(
+      _deploymentParams(), _deploymentFromEnv(), _deployer, vm.envOr("SUPERMAJORITY_GOVERNOR_DEPLOYER", _deployer)
+    );
   }
 
   // Builds the migration proposal: grant the three roles to the Veto Governor, then revoke them from

@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {ProposeProtocolTimelockRoleMigration} from "script/ProposeProtocolTimelockRoleMigration.s.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMainnetConfig.sol";
+import {ZkProtocolUpgradeEraMainnetConfig} from "script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 
 // The Protocol Timelock role migration on ZKsync Era mainnet.
 //
@@ -12,6 +12,7 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 // script/ProposeProtocolTimelockRoleMigrationEraMainnet.s.sol:ProposeProtocolTimelockRoleMigrationEraMainnet
 // --zksync --rpc-url <era-rpc> --broadcast --account <delegate-keystore-account> --sender <delegate-address>`, where
 // the delegate's votes meet `ZkProtocolGovernor`'s proposal threshold.
+// Also set `SUPERMAJORITY_GOVERNOR_DEPLOYER=<addr>` if `DeploySupermajorityGovernor` was run from a different account.
 contract ProposeProtocolTimelockRoleMigrationEraMainnet is
   ProposeProtocolTimelockRoleMigration,
   ZkProtocolUpgradeEraMainnetConfig
