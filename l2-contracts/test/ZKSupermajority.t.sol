@@ -4,8 +4,9 @@ pragma solidity 0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {GovernorCompatibilityBravo} from
-  "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
+import {
+  GovernorCompatibilityBravo
+} from "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
 import {ERC20VotesFake} from "test/fakes/ERC20VotesFake.sol";
@@ -28,14 +29,7 @@ contract ZKSupermajorityTest is Test, Constants {
     // These tests only count votes, so the proposal threshold is zero and the timelock grants the governor no roles.
     timelock = new TimelockController(1 days, new address[](0), new address[](0), address(this));
     governor = new ZkProtocolGovernor(
-      "ZKsync Supermajority Governor",
-      IVotes(address(token)),
-      timelock,
-      1 days,
-      7 days,
-      0,
-      SUPERMAJORITY_QUORUM,
-      3 days
+      "ZKsync Supermajority Governor", IVotes(address(token)), timelock, 1 days, 7 days, 0, SUPERMAJORITY_QUORUM, 3 days
     );
   }
 
@@ -130,10 +124,9 @@ contract State is ZKSupermajorityTest {
     assertEq(uint8(_stateAfterVoting(_forVotes, 0, _abstainVotes)), uint8(IGovernor.ProposalState.Defeated));
   }
 
-  function testFuzz_DefeatedWhenForVotesMeetQuorumButDoNotExceedAgainstVotes(
-    uint256 _forVotes,
-    uint256 _againstVotes
-  ) public {
+  function testFuzz_DefeatedWhenForVotesMeetQuorumButDoNotExceedAgainstVotes(uint256 _forVotes, uint256 _againstVotes)
+    public
+  {
     _forVotes = bound(_forVotes, SUPERMAJORITY_QUORUM, MAX_SUPERMAJORITY_VOTES);
     _againstVotes = bound(_againstVotes, _forVotes, MAX_SUPERMAJORITY_VOTES);
 
