@@ -100,11 +100,34 @@ contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers, Constants {
 }
 
 contract Constructor is ZkProtocolUpgradeVetoGovernorTest {
-  function testFuzz_SetsTheInitialVetoThreshold(uint256 _vetoThreshold) public {
+  function testFuzz_SetsAllConstructorParameters(
+    BasicCouncilVetoGovernor.ConstructorParams memory _params,
+    uint256 _vetoThreshold
+  ) public {
+    // The token needs code, since the constructor reads its clock.
+    _params.token = address(token);
+    _params.vetoThresholdNumerator = 0;
+    vm.assume(_params.governorAdmin != address(0));
+    vm.assume(_params.votingPeriod != 0);
+    _params.votingPeriodExtensionThresholdPct = uint16(_bound(_params.votingPeriodExtensionThresholdPct, 0, 100));
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
 
-    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
+    ZkProtocolUpgradeVetoGovernor _governor = new ZkProtocolUpgradeVetoGovernor(_params, _vetoThreshold);
 
+    assertEq(_governor.name(), _params.name);
+    assertEq(address(_governor.token()), _params.token);
+    assertEq(_governor.votingDelay(), _params.votingDelay);
+    assertEq(_governor.votingPeriod(), _params.votingPeriod);
+    assertEq(_governor.proposalThreshold(), _params.proposalThreshold);
+    assertEq(_governor.vetoGuardian(), _params.vetoGuardian);
+    assertEq(_governor.vetoOverrideRole(), _params.vetoOverrideRole);
+    assertEq(_governor.vetoOverrideDuration(), _params.vetoOverrideDuration);
+    assertEq(_governor.votingPeriodExtension(), _params.votingPeriodExtension);
+    assertEq(_governor.minorVetoExtensionThresholdPct(), _params.votingPeriodExtensionThresholdPct);
+    assertEq(address(_governor.timelock()), address(_params.timelock));
+    assertEq(_governor.owner(), _params.governorAdmin);
+    assertEq(_governor.COUNCIL(), _params.council);
+    assertEq(_governor.vetoThresholdNumerator(), 0);
     assertEq(_governor.vetoThreshold(block.timestamp), _vetoThreshold);
   }
 
