@@ -51,7 +51,7 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     // Fail before deploying anything if the Supermajority Governor or override timelock is wrong. Once the Veto
     // Governor is deployed, replacing its override timelock takes a full ZIP, since only the governance admin can call
     // `setVetoOverrideRole`.
-    _validateSupermajorityGovernorContracts(
+    _validateSupermajorityGovernorDeployment(
       _params,
       _deployment.supermajorityGovernor,
       address(_deployment.overrideTimelock),

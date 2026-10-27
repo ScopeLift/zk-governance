@@ -23,10 +23,9 @@ import {IZkProtocolGovernor} from "./interfaces/IZkProtocolGovernor.sol";
 // through whichever OpenZeppelin `TimelockController` the project maps, v4 or v5, since the checks call only functions
 // both versions share.
 abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDeploymentConfig {
-  // Rejects params that would deploy a Supermajority Governor and override timelock in a form
-  // `DeployZkProtocolUpgradeGovernance` can't use. Both deploy scripts run it before deploying, so
-  // `DeploySupermajorityGovernor` fails before broadcasting rather than leaving contracts the council deployment would
-  // refuse.
+  // Rejects a `zkToken` with no code, and a veto override window (`vetoGovernorVetoOverrideDuration`) too short to fit
+  // a Supermajority Governor override: its voting delay, voting period and late-quorum extension, then the override
+  // timelock's delay.
   function _validateSupermajorityGovernorParams(DeploymentParams memory _params) internal view {
     if (_params.zkToken.code.length == 0) {
       revert("SupermajorityGovernorChecks: zkToken has no code; set it to the ZK token");
@@ -44,7 +43,7 @@ abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDe
   }
 
   // Runs every check of the Supermajority Governor and override timelock deployed by `_deployer`.
-  function _validateSupermajorityGovernorContracts(
+  function _validateSupermajorityGovernorDeployment(
     DeploymentParams memory _params,
     address _supermajorityGovernor,
     address _overrideTimelock,

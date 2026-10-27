@@ -44,7 +44,7 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     _validateCouncilToken(_params, _deployment);
     _validateCouncilGovernor(_params, _deployment);
     _validateVetoGovernor(_params, _deployment, _deployer);
-    _validateSupermajorityGovernorContracts(
+    _validateSupermajorityGovernorDeployment(
       _params,
       _deployment.supermajorityGovernor,
       address(_deployment.overrideTimelock),

@@ -26,6 +26,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 
   function run() public virtual {
     DeploymentParams memory _params = _deploymentParams();
+    // Params the council deployment would refuse fail here, rather than after the governor is deployed.
     _validateSupermajorityGovernorParams(_params);
     _logDeploymentParams(_params);
 
@@ -67,7 +68,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 
     vm.stopBroadcast();
 
-    _validateSupermajorityGovernorContracts(_params, address(governor), address(timelock), _deployer);
+    _validateSupermajorityGovernorDeployment(_params, address(governor), address(timelock), _deployer);
 
     _log(string.concat("Supermajority Governor (SUPERMAJORITY_GOVERNOR): ", vm.toString(address(governor))));
     _log(string.concat("Override TimelockController (OVERRIDE_TIMELOCK): ", vm.toString(address(timelock))));
@@ -78,7 +79,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
   function check() public virtual {
     governor = ZkProtocolGovernor(payable(vm.envAddress("SUPERMAJORITY_GOVERNOR")));
     timelock = TimelockController(payable(vm.envAddress("OVERRIDE_TIMELOCK")));
-    _validateSupermajorityGovernorContracts(
+    _validateSupermajorityGovernorDeployment(
       _deploymentParams(), address(governor), address(timelock), vm.envAddress("DEPLOYER")
     );
     _log("All Supermajority Governor deployment checks passed");
