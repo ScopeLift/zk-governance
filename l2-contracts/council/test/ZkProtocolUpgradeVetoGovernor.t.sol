@@ -45,6 +45,21 @@ contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers, Constants {
     });
   }
 
+  // Constrains fuzzed constructor params to those the base governor's constructor accepts.
+  function _boundToValidConstructorParams(BasicCouncilVetoGovernor.ConstructorParams memory _params)
+    internal
+    view
+    returns (BasicCouncilVetoGovernor.ConstructorParams memory)
+  {
+    // The token needs code, since the constructor reads its clock.
+    _params.token = address(token);
+    _params.vetoThresholdNumerator = 0;
+    vm.assume(_params.governorAdmin != address(0));
+    vm.assume(_params.votingPeriod != 0);
+    _params.votingPeriodExtensionThresholdPct = uint16(_bound(_params.votingPeriodExtensionThresholdPct, 0, 100));
+    return _params;
+  }
+
   function _deployGovernorWithVetoThreshold(uint256 _vetoThreshold) internal returns (ZkProtocolUpgradeVetoGovernor) {
     return new ZkProtocolUpgradeVetoGovernor(_constructorParams(0), _vetoThreshold);
   }
@@ -104,12 +119,7 @@ contract Constructor is ZkProtocolUpgradeVetoGovernorTest {
     BasicCouncilVetoGovernor.ConstructorParams memory _params,
     uint256 _vetoThreshold
   ) public {
-    // The token needs code, since the constructor reads its clock.
-    _params.token = address(token);
-    _params.vetoThresholdNumerator = 0;
-    vm.assume(_params.governorAdmin != address(0));
-    vm.assume(_params.votingPeriod != 0);
-    _params.votingPeriodExtensionThresholdPct = uint16(_bound(_params.votingPeriodExtensionThresholdPct, 0, 100));
+    _params = _boundToValidConstructorParams(_params);
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
 
     ZkProtocolUpgradeVetoGovernor _governor = new ZkProtocolUpgradeVetoGovernor(_params, _vetoThreshold);
@@ -139,19 +149,23 @@ contract Constructor is ZkProtocolUpgradeVetoGovernorTest {
     _deployGovernorWithVetoThreshold(_vetoThreshold);
   }
 
-  function test_RevertIf_TheInitialVetoThresholdIsZero() public {
-    BasicCouncilVetoGovernor.ConstructorParams memory _params = _constructorParams(0);
+  function testFuzz_RevertIf_TheInitialVetoThresholdIsZero(BasicCouncilVetoGovernor.ConstructorParams memory _params)
+    public
+  {
+    _params = _boundToValidConstructorParams(_params);
 
     vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__InvalidVetoThreshold.selector);
     new ZkProtocolUpgradeVetoGovernor(_params, 0);
   }
 
-  function testFuzz_RevertIf_TheVetoThresholdNumeratorIsNonZero(uint256 _vetoThresholdNumerator, uint256 _vetoThreshold)
-    public
-  {
-    _vetoThresholdNumerator = _bound(_vetoThresholdNumerator, 1, type(uint256).max);
+  function testFuzz_RevertIf_TheVetoThresholdNumeratorIsNonZero(
+    BasicCouncilVetoGovernor.ConstructorParams memory _params,
+    uint256 _vetoThresholdNumerator,
+    uint256 _vetoThreshold
+  ) public {
+    _params = _boundToValidConstructorParams(_params);
+    _params.vetoThresholdNumerator = _bound(_vetoThresholdNumerator, 1, type(uint256).max);
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
-    BasicCouncilVetoGovernor.ConstructorParams memory _params = _constructorParams(_vetoThresholdNumerator);
 
     vm.expectRevert(ZkProtocolUpgradeVetoGovernor.ZkProtocolUpgradeVetoGovernor__VetoThresholdFractionDisabled.selector);
     new ZkProtocolUpgradeVetoGovernor(_params, _vetoThreshold);
