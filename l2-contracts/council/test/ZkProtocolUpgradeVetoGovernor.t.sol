@@ -4,18 +4,14 @@ pragma solidity 0.8.30;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {GovernorCountingSimple} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGovernor.sol";
 import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.sol";
 import {FakeVotesToken} from "test/fakes/FakeVotesToken.sol";
+import {Constants} from "test/utils/Constants.sol";
 import {TestHelpers} from "test/utils/TestHelpers.sol";
 
-contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers {
-  uint256 constant MAX_VETO_THRESHOLD = 1e30;
-  uint256 constant MAX_VOTES = 2 * MAX_VETO_THRESHOLD;
-  uint48 constant VOTING_PERIOD_EXTENSION = 2 days;
-  uint16 constant VOTING_PERIOD_EXTENSION_THRESHOLD_PCT = 50;
-  uint8 constant AGAINST = 0;
-
+contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers, Constants {
   FakeVotesToken token;
   address council = makeAddr("Council");
   address governorAdmin = makeAddr("Governor Admin");
@@ -33,8 +29,8 @@ contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers {
     return BasicCouncilVetoGovernor.ConstructorParams({
       name: "Veto Governor",
       token: address(token),
-      votingDelay: 1 days,
-      votingPeriod: 7 days,
+      votingDelay: VOTING_DELAY,
+      votingPeriod: VOTING_PERIOD,
       proposalThreshold: 0,
       vetoGuardian: makeAddr("Veto Guardian"),
       vetoOverrideRole: makeAddr("Veto Override Role"),
@@ -75,13 +71,13 @@ contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers {
     uint256[] memory _values = new uint256[](1);
     bytes[] memory _calldatas = new bytes[](1);
     vm.prank(council);
-    return _governor.propose(_targets, _values, _calldatas, "A council proposal");
+    return _governor.propose(_targets, _values, _calldatas, PROPOSAL_DESCRIPTION);
   }
 
   function _castAgainstVoteOnceVotingOpens(ZkProtocolUpgradeVetoGovernor _governor, uint256 _proposalId) internal {
     vm.warp(_governor.proposalSnapshot(_proposalId) + 1);
     vm.prank(voter);
-    _governor.castVote(_proposalId, AGAINST);
+    _governor.castVote(_proposalId, uint8(GovernorCountingSimple.VoteType.Against));
   }
 
   function _jumpPastTheProposalDeadline(ZkProtocolUpgradeVetoGovernor _governor, uint256 _proposalId) internal {
@@ -197,7 +193,7 @@ contract State is ZkProtocolUpgradeVetoGovernorTest {
     public
   {
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
-    _againstVotes = _bound(_againstVotes, _vetoThreshold, MAX_VOTES);
+    _againstVotes = _bound(_againstVotes, _vetoThreshold, MAX_VETO_THRESHOLD);
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
     _mintAndSelfDelegateVotes(voter, _againstVotes);
     uint256 _proposalId = _proposeFromCouncil(_governor);
@@ -324,7 +320,7 @@ contract ProposalDeadline is ZkProtocolUpgradeVetoGovernorTest {
     uint256 _againstVotes
   ) public {
     _vetoThreshold = _bound(_vetoThreshold, 2, MAX_VETO_THRESHOLD);
-    _againstVotes = _bound(_againstVotes, _votingPeriodExtensionThreshold(_vetoThreshold), MAX_VOTES);
+    _againstVotes = _bound(_againstVotes, _votingPeriodExtensionThreshold(_vetoThreshold), MAX_VETO_THRESHOLD);
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
     _mintAndSelfDelegateVotes(voter, _againstVotes);
     uint256 _proposalId = _proposeFromCouncil(_governor);
