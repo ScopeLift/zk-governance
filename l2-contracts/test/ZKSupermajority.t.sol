@@ -120,23 +120,27 @@ contract State is ZKSupermajorityTest {
     );
   }
 
-  function testFuzz_DefeatedWhenForVotesAreBelowQuorumEvenWithAbstainVotes(uint256 _forVotes, uint256 _abstainVotes)
-    public
-  {
+  function testFuzz_DefeatedWhenForVotesAreBelowQuorumEvenIfAbstainVotesMeetQuorum(
+    uint256 _forVotes,
+    uint256 _abstainVotes
+  ) public {
     _forVotes = bound(_forVotes, 1, SUPERMAJORITY_QUORUM - 1);
     _abstainVotes = bound(_abstainVotes, SUPERMAJORITY_QUORUM, MAX_SUPERMAJORITY_VOTES);
 
     assertEq(uint8(_stateAfterVoting(_forVotes, 0, _abstainVotes)), uint8(IGovernor.ProposalState.Defeated));
   }
 
-  function testFuzz_DefeatedWhenAgainstVotesAreAtLeastForVotes(uint256 _forVotes, uint256 _againstVotes) public {
+  function testFuzz_DefeatedWhenForVotesMeetQuorumButDoNotExceedAgainstVotes(
+    uint256 _forVotes,
+    uint256 _againstVotes
+  ) public {
     _forVotes = bound(_forVotes, SUPERMAJORITY_QUORUM, MAX_SUPERMAJORITY_VOTES);
     _againstVotes = bound(_againstVotes, _forVotes, MAX_SUPERMAJORITY_VOTES);
 
     assertEq(uint8(_stateAfterVoting(_forVotes, _againstVotes, 0)), uint8(IGovernor.ProposalState.Defeated));
   }
 
-  function testFuzz_SucceedsWhenSplitVoteForPartMeetsQuorumAndExceedsAgainstPart(
+  function testFuzz_SucceedsWhenForVotesMeetQuorumAndExceedAgainstVotesInOneFractionalVote(
     uint128 _forVotes,
     uint128 _againstVotes,
     uint128 _abstainVotes
@@ -150,14 +154,17 @@ contract State is ZKSupermajorityTest {
     );
   }
 
-  function testFuzz_DefeatedWhenSplitVoteAgainstPartIsAtLeastForPart(uint128 _forVotes, uint128 _againstVotes) public {
+  function testFuzz_DefeatedWhenForVotesMeetQuorumButDoNotExceedAgainstVotesInOneFractionalVote(
+    uint128 _forVotes,
+    uint128 _againstVotes
+  ) public {
     _forVotes = uint128(bound(_forVotes, SUPERMAJORITY_QUORUM, MAX_SUPERMAJORITY_VOTES));
     _againstVotes = uint128(bound(_againstVotes, _forVotes, MAX_SUPERMAJORITY_VOTES));
 
     assertEq(uint8(_stateAfterSplitVote(_forVotes, _againstVotes, 0)), uint8(IGovernor.ProposalState.Defeated));
   }
 
-  function testFuzz_DefeatedWhenSplitVoteForPartIsBelowQuorumEvenWithAbstainPart(
+  function testFuzz_DefeatedWhenForVotesAreBelowQuorumEvenIfAbstainVotesMeetQuorumInOneFractionalVote(
     uint128 _forVotes,
     uint128 _abstainVotes
   ) public {
