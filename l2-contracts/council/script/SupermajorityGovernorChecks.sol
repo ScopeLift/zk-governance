@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {DeployBase} from "./DeployBase.sol";
-import {ZkProtocolUpgradeDeploymentConfig} from "./ZkProtocolUpgradeDeploymentConfig.sol";
+import {ZkProtocolUpgradeDeploymentConfig} from "./configs/ZkProtocolUpgradeDeploymentConfig.sol";
 
 // The parts of `ZkProtocolGovernor` the checks read. `DeploySupermajorityGovernor` deploys it as the Supermajority
 // Governor; the council project cannot import it, since it is built on OpenZeppelin v4.

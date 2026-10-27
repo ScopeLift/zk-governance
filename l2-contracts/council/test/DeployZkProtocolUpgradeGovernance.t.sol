@@ -3,12 +3,10 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {
-  DeployZkProtocolUpgradeGovernance,
-  DeployZkProtocolUpgradeGovernanceEraMainnet
-} from "script/DeployZkProtocolUpgradeGovernance.s.sol";
-import {ZkProtocolUpgradeDeploymentConfig} from "script/ZkProtocolUpgradeDeploymentConfig.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMainnetConfig.sol";
+import {DeployZkProtocolUpgradeGovernance} from "script/DeployZkProtocolUpgradeGovernance.s.sol";
+import {DeployZkProtocolUpgradeGovernanceEraMainnet} from "script/DeployZkProtocolUpgradeGovernanceEraMainnet.s.sol";
+import {ZkProtocolUpgradeDeploymentConfig} from "script/configs/ZkProtocolUpgradeDeploymentConfig.sol";
+import {ZkProtocolUpgradeEraMainnetConfig} from "script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {FakeSupermajorityGovernor} from "test/fakes/FakeSupermajorityGovernor.sol";
 import {FakeVotesToken} from "test/fakes/FakeVotesToken.sol";
 

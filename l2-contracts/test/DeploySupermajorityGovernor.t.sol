@@ -4,8 +4,8 @@ pragma solidity 0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {DeploySupermajorityGovernorEraMainnet} from "script/DeploySupermajorityGovernor.s.sol";
-import {ZkProtocolUpgradeDeploymentConfig} from "council/script/ZkProtocolUpgradeDeploymentConfig.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgradeEraMainnetConfig.sol";
+import {ZkProtocolUpgradeDeploymentConfig} from "council/script/configs/ZkProtocolUpgradeDeploymentConfig.sol";
+import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {ERC20VotesFake} from "test/fakes/ERC20VotesFake.sol";
 
 /// @notice Stands in for the Veto Governor's `overrideVeto`, recording who called it.

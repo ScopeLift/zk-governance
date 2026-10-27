@@ -8,7 +8,6 @@ import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGover
 import {CouncilERC20} from "council-governance/CouncilERC20.sol";
 import {ZkProtocolUpgradeCouncilGovernor} from "src/ZkProtocolUpgradeCouncilGovernor.sol";
 import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGovernanceChecks.sol";
 
 // Run after `DeploySupermajorityGovernor` in the main l2-contracts project, which deploys the Supermajority Governor and
@@ -215,24 +214,5 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
       string.concat("[7/7] Transferring the Council Governor's admin role to ", vm.toString(_params.governanceAdmin))
     );
     councilGovernor.transferOwnership(_params.governanceAdmin);
-  }
-}
-
-// Deploys the protocol upgrade council governance on ZKsync Era mainnet with the ZIP parameters in
-// `ZkProtocolUpgradeEraMainnetConfig`.
-//
-// Usage, from `l2-contracts/council`, with the deployer passed through the usual forge wallet options, e.g.
-// `--account`: `SUPERMAJORITY_GOVERNOR=<addr> OVERRIDE_TIMELOCK=<addr> forge script
-// script/DeployZkProtocolUpgradeGovernance.s.sol:DeployZkProtocolUpgradeGovernanceEraMainnet --zksync
-// --rpc-url <era-rpc> --broadcast`
-// Also set `SUPERMAJORITY_GOVERNOR_DEPLOYER=<addr>` if `DeploySupermajorityGovernor` was run from a different account.
-// Omit `--broadcast` for a dry run against the live chain state. Add `--sig "check()"` to check an existing deployment.
-contract DeployZkProtocolUpgradeGovernanceEraMainnet is
-  DeployZkProtocolUpgradeGovernance,
-  ZkProtocolUpgradeEraMainnetConfig
-{
-  // Script entrypoint
-  function run() public override {
-    DeployZkProtocolUpgradeGovernance.run();
   }
 }

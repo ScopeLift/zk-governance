@@ -5,7 +5,7 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
 import {SupermajorityGovernorChecks} from "council/script/SupermajorityGovernorChecks.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgradeEraMainnetConfig.sol";
+import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 
 // Deploys the ZKsync Supermajority Governor and its override timelock. Run this before
 // `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council`, which deploys the council contracts and makes this
