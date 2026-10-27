@@ -50,10 +50,12 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
     Proposal memory _proposal = _migrationProposal(_vetoGovernor);
     uint256 _proposalId = _hashProposal(_proposal);
     _checkNotAlreadyProposed(_proposalId);
-    _checkProposerMeetsThreshold(msg.sender);
 
     // Proposed before the simulation, which pranks `ZkProtocolGovernor` and so must stay out of the broadcast.
     vm.startBroadcast();
+    // The broadcaster is the proposer. The threshold check only makes view calls, so it adds nothing to the broadcast.
+    (, address _proposer,) = vm.readCallers();
+    _checkProposerMeetsThreshold(_proposer);
     uint256 _proposedId = IGovernor(_protocolGovernor())
       .propose(_proposal.targets, _proposal.values, _proposal.calldatas, _proposal.description);
     vm.stopBroadcast();
@@ -66,7 +68,7 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
 
     _log(string.concat("Proposal ID: ", vm.toString(bytes32(_proposalId))));
     _log(string.concat("Governor: ", vm.toString(_protocolGovernor())));
-    _log(string.concat("Proposed by: ", vm.toString(msg.sender)));
+    _log(string.concat("Proposed by: ", vm.toString(_proposer)));
     _log("Simulated execution: all migration checks passed");
   }
 
@@ -212,11 +214,11 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
     );
   }
 
-  // Checks that `_proposer` has the votes `ZkProtocolGovernor` requires to propose, counted at the previous block as
-  // the governor counts them.
+  // Checks that `_proposer` has the votes `ZkProtocolGovernor` requires to propose, counted one tick before the
+  // governor's current clock as the governor counts them. The clock is the ZK token's, which counts timestamps.
   function _checkProposerMeetsThreshold(address _proposer) internal view {
     IGovernor _governor = IGovernor(_protocolGovernor());
-    if (_governor.getVotes(_proposer, block.number - 1) < _governor.proposalThreshold()) {
+    if (_governor.getVotes(_proposer, _governor.clock() - 1) < _governor.proposalThreshold()) {
       revert("ProposeProtocolTimelockRoleMigration: the proposer's votes are below ZkProtocolGovernor's threshold");
     }
   }

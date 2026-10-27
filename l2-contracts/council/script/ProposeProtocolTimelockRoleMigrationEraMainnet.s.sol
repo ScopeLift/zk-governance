@@ -10,8 +10,8 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 // `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`:
 // `forge script
 // script/ProposeProtocolTimelockRoleMigrationEraMainnet.s.sol:ProposeProtocolTimelockRoleMigrationEraMainnet
-// --zksync --rpc-url <era-rpc> --broadcast --account <delegate-keystore-account> --sender <delegate-address>`, where the
-// delegate's votes meet `ZkProtocolGovernor`'s proposal threshold.
+// --zksync --rpc-url <era-rpc> --broadcast --account <delegate-keystore-account> --sender <delegate-address>`, where
+// the delegate's votes meet `ZkProtocolGovernor`'s proposal threshold.
 contract ProposeProtocolTimelockRoleMigrationEraMainnet is
   ProposeProtocolTimelockRoleMigration,
   ZkProtocolUpgradeEraMainnetConfig

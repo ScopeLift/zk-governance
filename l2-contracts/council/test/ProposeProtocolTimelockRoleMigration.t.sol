@@ -1,87 +1,144 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {
   ProposeProtocolTimelockRoleMigrationEraMainnet
 } from "script/ProposeProtocolTimelockRoleMigrationEraMainnet.s.sol";
-import {ZkProtocolUpgradeDeploymentConfig} from "script/ZkProtocolUpgradeDeploymentConfig.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMainnetConfig.sol";
-import {FakeProtocolGovernor} from "test/fakes/FakeProtocolGovernor.sol";
+import {
+  ProposeProtocolTimelockRoleMigrationEraMainnetHarness
+} from "test/harnesses/ProposeProtocolTimelockRoleMigrationEraMainnetHarness.sol";
+import {IZkCheatcodes} from "test/interfaces/IZkCheatcodes.sol";
 
-/// @notice Runs the Era mainnet role migration script against a fake `ZkProtocolGovernor` and a Protocol Timelock set
-/// up as on mainnet: self-administered, no delay, and `ZkProtocolGovernor` holding the three roles.
-/// @dev The deployment checks the script runs first are covered by `DeployZkProtocolUpgradeGovernance.t.sol`, so they
-/// are skipped here, where no council governance is deployed. The test inherits the script, so its cheatcodes run in
-/// the EVM under `--zksync`.
-contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelockRoleMigrationEraMainnet {
-  TimelockController protocolTimelock;
-  FakeProtocolGovernor protocolGovernor;
+/// @notice Runs the Era mainnet role migration script on a fork of Era mainnet, against the live `ZkProtocolGovernor`,
+/// Protocol Timelock and ZK token.
+/// @dev Run under `--zksync`, since the forked contracts are EraVM contracts. The script is deployed and run in the
+/// EVM, as `forge script --zksync` runs it, because EraVM has no cheatcodes; its calls to the forked contracts still
+/// run in EraVM. It broadcasts from the default sender, which the tests make a ZK delegate.
+contract ProposeProtocolTimelockRoleMigrationTest is Test {
+  // A fork block from before the migration, while `ZkProtocolGovernor` holds the Protocol Timelock roles.
+  uint256 constant FORK_BLOCK = 72_650_000;
+
+  address constant ZK_TOKEN = 0x5A7d6b2F92C77FAD6CCaBd7EE0624E64907Eaf3E;
+  IGovernor constant PROTOCOL_GOVERNOR = IGovernor(0x76705327e682F2d96943280D99464Ab61219e34f);
+  TimelockController constant PROTOCOL_TIMELOCK =
+    TimelockController(payable(0x085b8B6407f150D62adB1EF926F7f304600ec714));
+
+  bytes32 constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
+  bytes32 constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+  bytes32 constant CANCELLER_ROLE = keccak256("CANCELLER_ROLE");
+  // The Protocol Timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
+  bytes32 constant TIMELOCK_ADMIN_ROLE = keccak256("TIMELOCK_ADMIN_ROLE");
+
+  // OpenZeppelin v4's `ProposalCreated`, which `ZkProtocolGovernor` emits.
+  bytes32 constant PROPOSAL_CREATED =
+    keccak256("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
+
   address vetoGovernor = makeAddr("Veto Governor");
 
+  // A `ZkProtocolGovernor` proposal, as `ProposalCreated` reports it.
+  struct CreatedProposal {
+    uint256 proposalId;
+    address proposer;
+    address[] targets;
+    uint256[] values;
+    bytes[] calldatas;
+    string description;
+  }
+
   function setUp() public virtual {
-    // A zero-delay operation scheduled at timestamp 1 would read as done, since the timelock marks done operations
-    // with timestamp 1.
-    vm.warp(1_700_000_000);
-    protocolTimelock = new TimelockController(0, new address[](0), new address[](0), address(this));
-    protocolGovernor = new FakeProtocolGovernor(address(protocolTimelock));
-    protocolTimelock.grantRole(PROPOSER_ROLE, address(protocolGovernor));
-    protocolTimelock.grantRole(EXECUTOR_ROLE, address(protocolGovernor));
-    protocolTimelock.grantRole(CANCELLER_ROLE, address(protocolGovernor));
-    // The real Protocol Timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
-    protocolTimelock.grantRole(TIMELOCK_ADMIN_ROLE, address(protocolTimelock));
-    // The fake governor has no `proposalSnapshot`, so by default it reports that no proposal exists.
-    vm.mockCall(
-      address(protocolGovernor), abi.encodeWithSelector(IGovernor.proposalSnapshot.selector), abi.encode(uint256(0))
-    );
-    disableLogging();
+    vm.createSelectFork(vm.envOr("ZKSYNC_RPC_URL", string("https://mainnet.era.zksync.io")), FORK_BLOCK);
+    // The default sender pays for the EraVM calls the script broadcasts.
+    vm.deal(DEFAULT_SENDER, 1 ether);
   }
 
-  function _deploymentParams()
-    internal
-    view
-    override(ZkProtocolUpgradeDeploymentConfig, ZkProtocolUpgradeEraMainnetConfig)
-    returns (DeploymentParams memory _params)
-  {
-    _params = ZkProtocolUpgradeEraMainnetConfig._deploymentParams();
-    _params.protocolTimelock = address(protocolTimelock);
+  // Deploys the script in the EVM rather than EraVM, which matches production: `forge script --zksync` never deploys a
+  // script, it runs the script locally in the EVM, where cheatcodes exist, and sends only its broadcast transactions to
+  // Era. Under `--zksync` a plain `new` would deploy the script to EraVM, which has no cheatcodes, so its first `vm.*`
+  // call would revert. Calls to the script then run in the EVM too, while its calls to the forked governor, timelock
+  // and token still run in EraVM against their live bytecode. This would be wrong for a script that deploys contracts,
+  // since anything it creates would also land in the EVM, but this script deploys nothing.
+  function _deployScript(address _vetoGovernor) internal returns (ProposeProtocolTimelockRoleMigrationEraMainnet) {
+    IZkCheatcodes(address(vm)).zkVmSkip();
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script =
+      new ProposeProtocolTimelockRoleMigrationEraMainnetHarness(_vetoGovernor);
+    _script.disableLogging();
+    return _script;
   }
 
-  function _protocolGovernor() internal view override returns (address) {
-    return address(protocolGovernor);
+  // Runs the script and returns the proposal it made.
+  function _runAndRecordProposal(address _vetoGovernor) internal returns (CreatedProposal memory) {
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(_vetoGovernor);
+    vm.recordLogs();
+    _script.run();
+    return _createdProposal(vm.getRecordedLogs());
   }
 
-  function _deployedVetoGovernor() internal view override returns (address) {
-    return vetoGovernor;
+  // Finds the one proposal `ZkProtocolGovernor` created in `_logs`.
+  function _createdProposal(Vm.Log[] memory _logs) internal pure returns (CreatedProposal memory _proposal) {
+    uint256 _found;
+    for (uint256 _i = 0; _i < _logs.length; _i += 1) {
+      if (_logs[_i].emitter != address(PROTOCOL_GOVERNOR) || _logs[_i].topics[0] != PROPOSAL_CREATED) {
+        continue;
+      }
+      _found += 1;
+      (
+        _proposal.proposalId,
+        _proposal.proposer,
+        _proposal.targets,
+        _proposal.values,,
+        _proposal.calldatas,,,
+        _proposal.description
+      ) =
+        abi.decode(
+          _logs[_i].data, (uint256, address, address[], uint256[], string[], bytes[], uint256, uint256, string)
+        );
+    }
+    assertEq(_found, 1, "expected exactly one ZkProtocolGovernor proposal");
   }
 
-  function _validateExistingDeployment() internal view override {}
+  // Gives `_delegate` `_votes` ZK votes, counted from the next timestamp on.
+  function _dealVotes(address _delegate, uint256 _votes) internal {
+    deal(ZK_TOKEN, _delegate, _votes);
+    vm.prank(_delegate);
+    IVotes(ZK_TOKEN).delegate(_delegate);
+    vm.warp(block.timestamp + 1);
+  }
 
-  // Records a `ZkProtocolGovernor` proposal in a given state, with a snapshot so that it exists.
-  function _addProtocolGovernorProposal(uint256 _proposalId, IGovernor.ProposalState _state) internal {
-    protocolGovernor.setState(_proposalId, _state);
-    vm.mockCall(
-      address(protocolGovernor), abi.encodeCall(IGovernor.proposalSnapshot, (_proposalId)), abi.encode(block.number)
-    );
+  // Makes the default sender, which the script broadcasts from, a delegate at `ZkProtocolGovernor`'s threshold.
+  function _dealProposerVotes() internal {
+    _dealVotes(DEFAULT_SENDER, PROTOCOL_GOVERNOR.proposalThreshold());
+  }
+
+  // Changes a Protocol Timelock role as the timelock, which administers itself.
+  function _grantTimelockRole(bytes32 _role, address _account) internal {
+    vm.prank(address(PROTOCOL_TIMELOCK));
+    PROTOCOL_TIMELOCK.grantRole(_role, _account);
   }
 
   // Excludes the accounts the Veto Governor cannot be: the zero address, which the timelock treats as every account,
-  // `ZkProtocolGovernor`, which gives up the roles, and the Protocol Timelock, which administers itself.
+  // `ZkProtocolGovernor`, which gives up the roles, the Protocol Timelock, which administers itself, and any account
+  // already holding one of the roles.
   function _assumeValidVetoGovernor(address _vetoGovernor) internal view {
     vm.assume(_vetoGovernor != address(0));
-    vm.assume(_vetoGovernor != address(protocolGovernor));
-    vm.assume(_vetoGovernor != address(protocolTimelock));
+    vm.assume(_vetoGovernor != address(PROTOCOL_GOVERNOR));
+    vm.assume(_vetoGovernor != address(PROTOCOL_TIMELOCK));
+    bytes32[3] memory _roles = _migratedRoles();
+    for (uint256 _i = 0; _i < 3; _i += 1) {
+      vm.assume(!PROTOCOL_TIMELOCK.hasRole(_roles[_i], _vetoGovernor));
+    }
+  }
+
+  function _migratedRoles() internal pure returns (bytes32[3] memory) {
+    return [PROPOSER_ROLE, EXECUTOR_ROLE, CANCELLER_ROLE];
   }
 
   function _boundToMigratedRole(uint256 _roleIndex) internal pure returns (bytes32) {
     return _migratedRoles()[_bound(_roleIndex, 0, 2)];
-  }
-
-  function _boundToProposalState(uint8 _state) internal pure returns (IGovernor.ProposalState) {
-    return IGovernor.ProposalState(_bound(_state, 0, uint8(type(IGovernor.ProposalState).max)));
   }
 
   // The name the script reports for a proposal state.
@@ -92,97 +149,110 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
   }
 }
 
-contract MigrationProposal is ProposeProtocolTimelockRoleMigrationTest {
+contract Run is ProposeProtocolTimelockRoleMigrationTest {
+  function testFuzz_ProposesTheMigrationFromTheBroadcaster(address _vetoGovernor) public {
+    _assumeValidVetoGovernor(_vetoGovernor);
+    _dealProposerVotes();
+
+    CreatedProposal memory _proposal = _runAndRecordProposal(_vetoGovernor);
+
+    assertEq(_proposal.proposer, DEFAULT_SENDER);
+    assertEq(uint8(PROTOCOL_GOVERNOR.state(_proposal.proposalId)), uint8(IGovernor.ProposalState.Pending));
+  }
+
   function testFuzz_GrantsEveryRoleToTheVetoGovernorBeforeRevokingAnyFromZkProtocolGovernor(address _vetoGovernor)
     public
-    view
   {
-    Proposal memory _proposal = _migrationProposal(_vetoGovernor);
-
-    assertEq(_proposal.targets.length, 6);
-    assertEq(_proposal.targets[0], address(protocolTimelock));
-    assertEq(_proposal.calldatas[0], abi.encodeCall(IAccessControl.grantRole, (PROPOSER_ROLE, _vetoGovernor)));
-    assertEq(_proposal.targets[1], address(protocolTimelock));
-    assertEq(_proposal.calldatas[1], abi.encodeCall(IAccessControl.grantRole, (EXECUTOR_ROLE, _vetoGovernor)));
-    assertEq(_proposal.targets[2], address(protocolTimelock));
-    assertEq(_proposal.calldatas[2], abi.encodeCall(IAccessControl.grantRole, (CANCELLER_ROLE, _vetoGovernor)));
-    assertEq(_proposal.targets[3], address(protocolTimelock));
-    assertEq(
-      _proposal.calldatas[3], abi.encodeCall(IAccessControl.revokeRole, (PROPOSER_ROLE, address(protocolGovernor)))
-    );
-    assertEq(_proposal.targets[4], address(protocolTimelock));
-    assertEq(
-      _proposal.calldatas[4], abi.encodeCall(IAccessControl.revokeRole, (EXECUTOR_ROLE, address(protocolGovernor)))
-    );
-    assertEq(_proposal.targets[5], address(protocolTimelock));
-    assertEq(
-      _proposal.calldatas[5], abi.encodeCall(IAccessControl.revokeRole, (CANCELLER_ROLE, address(protocolGovernor)))
-    );
-  }
-}
-
-contract Run is ProposeProtocolTimelockRoleMigrationTest {
-  function testFuzz_ProposesTheMigrationOnZkProtocolGovernor(address _vetoGovernor) public {
     _assumeValidVetoGovernor(_vetoGovernor);
-    vetoGovernor = _vetoGovernor;
+    _dealProposerVotes();
 
-    run();
+    CreatedProposal memory _proposal = _runAndRecordProposal(_vetoGovernor);
 
-    uint256 _proposalId = _hashProposal(_migrationProposal(_vetoGovernor));
-    assertEq(uint8(protocolGovernor.state(_proposalId)), uint8(IGovernor.ProposalState.Pending));
+    address _timelock = address(PROTOCOL_TIMELOCK);
+    address _governor = address(PROTOCOL_GOVERNOR);
+    assertEq(_proposal.targets.length, 6);
+    assertEq(_proposal.values, new uint256[](6));
+    assertEq(_proposal.targets[0], _timelock);
+    assertEq(_proposal.calldatas[0], abi.encodeCall(IAccessControl.grantRole, (PROPOSER_ROLE, _vetoGovernor)));
+    assertEq(_proposal.targets[1], _timelock);
+    assertEq(_proposal.calldatas[1], abi.encodeCall(IAccessControl.grantRole, (EXECUTOR_ROLE, _vetoGovernor)));
+    assertEq(_proposal.targets[2], _timelock);
+    assertEq(_proposal.calldatas[2], abi.encodeCall(IAccessControl.grantRole, (CANCELLER_ROLE, _vetoGovernor)));
+    assertEq(_proposal.targets[3], _timelock);
+    assertEq(_proposal.calldatas[3], abi.encodeCall(IAccessControl.revokeRole, (PROPOSER_ROLE, _governor)));
+    assertEq(_proposal.targets[4], _timelock);
+    assertEq(_proposal.calldatas[4], abi.encodeCall(IAccessControl.revokeRole, (EXECUTOR_ROLE, _governor)));
+    assertEq(_proposal.targets[5], _timelock);
+    assertEq(_proposal.calldatas[5], abi.encodeCall(IAccessControl.revokeRole, (CANCELLER_ROLE, _governor)));
   }
 
   function testFuzz_MigratesTheProtocolTimelockRolesToTheVetoGovernor(address _vetoGovernor) public {
     _assumeValidVetoGovernor(_vetoGovernor);
-    vetoGovernor = _vetoGovernor;
+    _dealProposerVotes();
 
-    run();
+    CreatedProposal memory _proposal = _runAndRecordProposal(_vetoGovernor);
 
-    Proposal memory _proposal = _migrationProposal(_vetoGovernor);
     assertTrue(
-      protocolTimelock.isOperationDone(
-        protocolTimelock.hashOperationBatch(
+      PROTOCOL_TIMELOCK.isOperationDone(
+        PROTOCOL_TIMELOCK.hashOperationBatch(
           _proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), keccak256(bytes(_proposal.description))
         )
       )
     );
     bytes32[3] memory _roles = _migratedRoles();
     for (uint256 _i = 0; _i < 3; _i += 1) {
-      assertTrue(protocolTimelock.hasRole(_roles[_i], _vetoGovernor));
-      assertFalse(protocolTimelock.hasRole(_roles[_i], address(protocolGovernor)));
+      assertTrue(PROTOCOL_TIMELOCK.hasRole(_roles[_i], _vetoGovernor));
+      assertFalse(PROTOCOL_TIMELOCK.hasRole(_roles[_i], address(PROTOCOL_GOVERNOR)));
     }
-    assertTrue(protocolTimelock.hasRole(TIMELOCK_ADMIN_ROLE, address(protocolTimelock)));
-    assertEq(protocolTimelock.getMinDelay(), 0);
+    assertTrue(PROTOCOL_TIMELOCK.hasRole(TIMELOCK_ADMIN_ROLE, address(PROTOCOL_TIMELOCK)));
+    assertEq(PROTOCOL_TIMELOCK.getMinDelay(), 0);
 
     // The Veto Governor can now schedule and execute through the timelock, and `ZkProtocolGovernor` can no longer
     // schedule.
     address[] memory _targets = new address[](1);
-    _targets[0] = address(protocolTimelock);
+    _targets[0] = address(PROTOCOL_TIMELOCK);
     uint256[] memory _values = new uint256[](1);
     bytes[] memory _calldatas = new bytes[](1);
     _calldatas[0] = abi.encodeCall(IAccessControl.grantRole, (PROPOSER_ROLE, _vetoGovernor));
     vm.prank(_vetoGovernor);
-    protocolTimelock.scheduleBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0), 0);
+    PROTOCOL_TIMELOCK.scheduleBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0), 0);
     vm.prank(_vetoGovernor);
-    protocolTimelock.executeBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0));
+    PROTOCOL_TIMELOCK.executeBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0));
     assertTrue(
-      protocolTimelock.isOperationDone(
-        protocolTimelock.hashOperationBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0))
+      PROTOCOL_TIMELOCK.isOperationDone(
+        PROTOCOL_TIMELOCK.hashOperationBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0))
       )
     );
 
+    // OpenZeppelin v4's `AccessControl` reverts with a string naming the account and the role.
     vm.expectRevert(
-      abi.encodeWithSelector(
-        IAccessControl.AccessControlUnauthorizedAccount.selector, address(protocolGovernor), PROPOSER_ROLE
+      bytes(
+        string.concat(
+          "AccessControl: account ",
+          vm.toLowercase(vm.toString(address(PROTOCOL_GOVERNOR))),
+          " is missing role ",
+          vm.toString(PROPOSER_ROLE)
+        )
       )
     );
-    vm.prank(address(protocolGovernor));
-    protocolTimelock.scheduleBatch(_targets, _values, _calldatas, bytes32(0), keccak256("salt"), 0);
+    vm.prank(address(PROTOCOL_GOVERNOR));
+    PROTOCOL_TIMELOCK.scheduleBatch(_targets, _values, _calldatas, bytes32(0), keccak256("salt"), 0);
   }
 
-  function testFuzz_RevertIf_TheMigrationProposalAlreadyExists(uint8 _state) public {
-    IGovernor.ProposalState _existingState = _boundToProposalState(_state);
-    _addProtocolGovernorProposal(_hashProposal(_migrationProposal(vetoGovernor)), _existingState);
+  function testFuzz_RevertIf_TheMigrationProposalAlreadyExists(uint256 _elapsed) public {
+    _dealProposerVotes();
+    // Records the migration proposal the script makes, then rolls back the run, which also simulated the migration.
+    uint256 _beforeRun = vm.snapshotState();
+    CreatedProposal memory _proposal = _runAndRecordProposal(vetoGovernor);
+    vm.revertToState(_beforeRun);
+    vm.prank(DEFAULT_SENDER);
+    PROTOCOL_GOVERNOR.propose(_proposal.targets, _proposal.values, _proposal.calldatas, _proposal.description);
+    // Up to just past the proposal's voting period, through its Pending, Active and Defeated states.
+    vm.warp(
+      block.timestamp + _bound(_elapsed, 0, PROTOCOL_GOVERNOR.votingDelay() + PROTOCOL_GOVERNOR.votingPeriod() + 1)
+    );
+    IGovernor.ProposalState _existingState = PROTOCOL_GOVERNOR.state(_proposal.proposalId);
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert(
       bytes(
@@ -193,53 +263,66 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
         )
       )
     );
-    this.run();
+    _script.run();
   }
 
-  function testFuzz_RevertIf_TheProposerIsBelowTheProposalThreshold(uint256 _proposalThreshold) public {
-    protocolGovernor.setProposalThreshold(_bound(_proposalThreshold, 1, type(uint256).max));
+  function testFuzz_RevertIf_TheProposerIsBelowTheProposalThreshold(uint256 _votes) public {
+    _dealVotes(DEFAULT_SENDER, _bound(_votes, 0, PROTOCOL_GOVERNOR.proposalThreshold() - 1));
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert(
       "ProposeProtocolTimelockRoleMigration: the proposer's votes are below ZkProtocolGovernor's threshold"
     );
-    this.run();
+    _script.run();
   }
 
   function testFuzz_RevertIf_TheVetoGovernorAlreadyHoldsARole(uint256 _roleIndex) public {
-    protocolTimelock.grantRole(_boundToMigratedRole(_roleIndex), vetoGovernor);
+    _dealProposerVotes();
+    _grantTimelockRole(_boundToMigratedRole(_roleIndex), vetoGovernor);
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: the Veto Governor already holds a Protocol Timelock role");
-    this.run();
+    _script.run();
   }
 
   function testFuzz_RevertIf_ZkProtocolGovernorDoesNotUseTheProtocolTimelock(address _otherTimelock) public {
-    vm.assume(_otherTimelock != address(protocolTimelock));
-    protocolGovernor = new FakeProtocolGovernor(_otherTimelock);
+    vm.assume(_otherTimelock != address(PROTOCOL_TIMELOCK));
+    _dealProposerVotes();
+    // `ZkProtocolGovernor` can only change its timelock through a proposal, so its answer is mocked.
+    vm.mockCall(address(PROTOCOL_GOVERNOR), abi.encodeWithSignature("timelock()"), abi.encode(_otherTimelock));
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor does not use the Protocol Timelock");
-    this.run();
+    _script.run();
   }
 
   function testFuzz_RevertIf_ZkProtocolGovernorIsMissingARole(uint256 _roleIndex) public {
-    protocolTimelock.revokeRole(_boundToMigratedRole(_roleIndex), address(protocolGovernor));
+    _dealProposerVotes();
+    vm.prank(address(PROTOCOL_TIMELOCK));
+    PROTOCOL_TIMELOCK.revokeRole(_boundToMigratedRole(_roleIndex), address(PROTOCOL_GOVERNOR));
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert(
       "ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor is missing a Protocol Timelock role it should hold"
     );
-    this.run();
+    _script.run();
   }
 
   function testFuzz_RevertIf_AGovernorWouldAdministerTheTimelockAfterTheMigration(bool _vetoGovernorIsAdmin) public {
-    protocolTimelock.grantRole(TIMELOCK_ADMIN_ROLE, _vetoGovernorIsAdmin ? vetoGovernor : address(protocolGovernor));
+    _dealProposerVotes();
+    _grantTimelockRole(TIMELOCK_ADMIN_ROLE, _vetoGovernorIsAdmin ? vetoGovernor : address(PROTOCOL_GOVERNOR));
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: a governor administers the Protocol Timelock");
-    this.run();
+    _script.run();
   }
 
   function testFuzz_RevertIf_ARoleIsOpenToEveryAccount(uint256 _roleIndex) public {
-    protocolTimelock.grantRole(_boundToMigratedRole(_roleIndex), address(0));
+    _dealProposerVotes();
+    _grantTimelockRole(_boundToMigratedRole(_roleIndex), address(0));
+    ProposeProtocolTimelockRoleMigrationEraMainnet _script = _deployScript(vetoGovernor);
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: a Protocol Timelock role is open to every account");
-    this.run();
+    _script.run();
   }
 }
