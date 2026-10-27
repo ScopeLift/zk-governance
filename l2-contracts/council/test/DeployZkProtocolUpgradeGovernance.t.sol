@@ -9,8 +9,7 @@ import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.s
 import {ZkProtocolUpgradeEraMainnetConfig} from "script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {FakeSupermajorityGovernor} from "test/fakes/FakeSupermajorityGovernor.sol";
 import {
-  DeployZkProtocolUpgradeGovernanceEraMainnetHarness,
-  DeployZkProtocolUpgradeGovernanceEraMainnetEnvDeployerHarness
+  DeployZkProtocolUpgradeGovernanceEraMainnetHarness
 } from "test/harnesses/DeployZkProtocolUpgradeGovernanceHarness.sol";
 
 interface IZkCheatcodes {
@@ -302,12 +301,8 @@ contract Check is DeployZkProtocolUpgradeGovernanceTest {
   function test_PassesForTheDeploymentRunMade() public {
     DeploymentParams memory _params = _deploymentParams();
     (address _governor, TimelockController _timelock) = _deploySupermajorityGovernor(_params);
-    vm.setEnv("SUPERMAJORITY_GOVERNOR_DEPLOYER", vm.toString(makeAddr("Supermajority Governor Deployer")));
-    // Reads the Supermajority Governor's deployer from `SUPERMAJORITY_GOVERNOR_DEPLOYER`, as the script does.
-    IZkCheatcodes(address(vm)).zkVmSkip();
     DeployZkProtocolUpgradeGovernanceEraMainnetHarness _script =
-      new DeployZkProtocolUpgradeGovernanceEraMainnetEnvDeployerHarness(_params, _governor, _timelock);
-    _script.disableLogging();
+      _deployScript(_params, _governor, _timelock, makeAddr("Supermajority Governor Deployer"));
     _script.run();
     vm.setEnv("SUPERMAJORITY_GOVERNOR", vm.toString(_governor));
     vm.setEnv("OVERRIDE_TIMELOCK", vm.toString(address(_timelock)));
