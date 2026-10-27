@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {Test, Vm} from "forge-std/Test.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {BasicCouncilVetoGovernor} from "council-governance/BasicCouncilVetoGovernor.sol";
 import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.sol";
 import {FakeVotesToken} from "test/fakes/FakeVotesToken.sol";
+import {TestHelpers} from "test/utils/TestHelpers.sol";
 
-contract ZkProtocolUpgradeVetoGovernorTest is Test {
+contract ZkProtocolUpgradeVetoGovernorTest is TestHelpers {
   uint256 constant MAX_VETO_THRESHOLD = 1e30;
   uint256 constant MAX_VOTES = 2 * MAX_VETO_THRESHOLD;
   uint48 constant VOTING_PERIOD_EXTENSION = 2 days;
@@ -91,22 +91,6 @@ contract ZkProtocolUpgradeVetoGovernorTest is Test {
   function _setVetoThresholdAsAdmin(ZkProtocolUpgradeVetoGovernor _governor, uint256 _newVetoThreshold) internal {
     vm.prank(governorAdmin);
     _governor.setVetoThreshold(_newVetoThreshold);
-  }
-
-  // Counts the recorded logs a given contract emitted. EraVM's system contracts emit their own logs on every call, so
-  // only the contract's own logs are counted.
-  function _countLogsEmittedBy(address _emitter) internal returns (uint256 _count) {
-    Vm.Log[] memory _logs = vm.getRecordedLogs();
-    for (uint256 _i = 0; _i < _logs.length; _i += 1) {
-      if (_logs[_i].emitter == _emitter) {
-        _count += 1;
-      }
-    }
-  }
-
-  // Excludes the addresses below 0x10000, where EraVM keeps its system contracts and precompiles.
-  function _assumeNotASystemAddress(address _account) internal pure {
-    vm.assume(uint160(_account) > 0xFFFF);
   }
 
   function _assertState(
