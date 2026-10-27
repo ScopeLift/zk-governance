@@ -3,29 +3,8 @@ pragma solidity ^0.8.24;
 
 import {DeployBase} from "./DeployBase.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "./configs/ZkProtocolUpgradeDeploymentConfig.sol";
-
-// The parts of `ZkProtocolGovernor` the checks read. `DeploySupermajorityGovernor` deploys it as the Supermajority
-// Governor; the council project cannot import it, since it is built on OpenZeppelin v4.
-interface IZkProtocolGovernor {
-  function name() external view returns (string memory);
-  function token() external view returns (address);
-  function timelock() external view returns (address);
-  function clock() external view returns (uint48);
-  function votingDelay() external view returns (uint256);
-  function votingPeriod() external view returns (uint256);
-  function proposalThreshold() external view returns (uint256);
-  function quorum(uint256 _timepoint) external view returns (uint256);
-  function lateQuorumVoteExtension() external view returns (uint64);
-}
-
-// The parts of an OpenZeppelin `TimelockController` the checks read, the same in v4 and v5.
-interface ITimelockRoles {
-  function PROPOSER_ROLE() external view returns (bytes32);
-  function EXECUTOR_ROLE() external view returns (bytes32);
-  function CANCELLER_ROLE() external view returns (bytes32);
-  function getMinDelay() external view returns (uint256);
-  function hasRole(bytes32 _role, address _account) external view returns (bool);
-}
+import {ITimelockRoles} from "./interfaces/ITimelockRoles.sol";
+import {IZkProtocolGovernor} from "./interfaces/IZkProtocolGovernor.sol";
 
 // Checks the Supermajority Governor and its override timelock against the params. `DeploySupermajorityGovernor` runs
 // these checks after deploying them, and `DeployZkProtocolUpgradeGovernance` runs them before deploying anything. They
