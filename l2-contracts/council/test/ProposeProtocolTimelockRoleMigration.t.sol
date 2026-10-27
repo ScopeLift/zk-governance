@@ -98,17 +98,26 @@ contract MigrationProposal is ProposeProtocolTimelockRoleMigrationTest {
     view
   {
     Proposal memory _proposal = _migrationProposal(_vetoGovernor);
-    bytes32[3] memory _roles = _migratedRoles();
 
     assertEq(_proposal.targets.length, 6);
-    for (uint256 _i = 0; _i < 3; _i += 1) {
-      assertEq(_proposal.targets[_i], address(protocolTimelock));
-      assertEq(_proposal.calldatas[_i], abi.encodeCall(IAccessControl.grantRole, (_roles[_i], _vetoGovernor)));
-      assertEq(_proposal.targets[_i + 3], address(protocolTimelock));
-      assertEq(
-        _proposal.calldatas[_i + 3], abi.encodeCall(IAccessControl.revokeRole, (_roles[_i], address(protocolGovernor)))
-      );
-    }
+    assertEq(_proposal.targets[0], address(protocolTimelock));
+    assertEq(_proposal.calldatas[0], abi.encodeCall(IAccessControl.grantRole, (PROPOSER_ROLE, _vetoGovernor)));
+    assertEq(_proposal.targets[1], address(protocolTimelock));
+    assertEq(_proposal.calldatas[1], abi.encodeCall(IAccessControl.grantRole, (EXECUTOR_ROLE, _vetoGovernor)));
+    assertEq(_proposal.targets[2], address(protocolTimelock));
+    assertEq(_proposal.calldatas[2], abi.encodeCall(IAccessControl.grantRole, (CANCELLER_ROLE, _vetoGovernor)));
+    assertEq(_proposal.targets[3], address(protocolTimelock));
+    assertEq(
+      _proposal.calldatas[3], abi.encodeCall(IAccessControl.revokeRole, (PROPOSER_ROLE, address(protocolGovernor)))
+    );
+    assertEq(_proposal.targets[4], address(protocolTimelock));
+    assertEq(
+      _proposal.calldatas[4], abi.encodeCall(IAccessControl.revokeRole, (EXECUTOR_ROLE, address(protocolGovernor)))
+    );
+    assertEq(_proposal.targets[5], address(protocolTimelock));
+    assertEq(
+      _proposal.calldatas[5], abi.encodeCall(IAccessControl.revokeRole, (CANCELLER_ROLE, address(protocolGovernor)))
+    );
   }
 }
 
