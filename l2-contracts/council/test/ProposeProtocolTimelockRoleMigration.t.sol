@@ -21,8 +21,6 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
   TimelockController protocolTimelock;
   FakeProtocolGovernor protocolGovernor;
   address vetoGovernor = makeAddr("Veto Governor");
-  // The proposals the fake governor reports having created, in place of its `ProposalCreated` logs.
-  uint256[] protocolGovernorProposalIds;
 
   function setUp() public virtual {
     vm.warp(1_700_000_000);
@@ -33,6 +31,10 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
     protocolTimelock.grantRole(CANCELLER_ROLE, address(protocolGovernor));
     // The real Protocol Timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
     protocolTimelock.grantRole(TIMELOCK_ADMIN_ROLE, address(protocolTimelock));
+    // The fake governor has no `proposalSnapshot`, so by default it reports that no proposal exists.
+    vm.mockCall(
+      address(protocolGovernor), abi.encodeWithSelector(IGovernor.proposalSnapshot.selector), abi.encode(uint256(0))
+    );
     disableLogging();
   }
 
@@ -56,14 +58,12 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
 
   function _validateExistingDeployment() internal view override {}
 
-  function _protocolGovernorProposalIds() internal view override returns (uint256[] memory) {
-    return protocolGovernorProposalIds;
-  }
-
-  // Records a `ZkProtocolGovernor` proposal other than the migration, in a given state.
+  // Records a `ZkProtocolGovernor` proposal in a given state, with a snapshot so that it exists.
   function _addProtocolGovernorProposal(uint256 _proposalId, IGovernor.ProposalState _state) internal {
     protocolGovernor.setState(_proposalId, _state);
-    protocolGovernorProposalIds.push(_proposalId);
+    vm.mockCall(
+      address(protocolGovernor), abi.encodeCall(IGovernor.proposalSnapshot, (_proposalId)), abi.encode(block.number)
+    );
   }
 
   function _assertRolesMovedToTheVetoGovernor() internal view {
@@ -99,16 +99,6 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
     uint256 _proposalId = _hashProposal(_migrationProposal(vetoGovernor));
     assertEq(uint8(protocolGovernor.state(_proposalId)), uint8(IGovernor.ProposalState.Pending));
     _assertRolesMovedToTheVetoGovernor();
-  }
-
-  function test_DoesNotFailOnOtherProposalsInFlight() public {
-    _addProtocolGovernorProposal(1, IGovernor.ProposalState.Active);
-    _addProtocolGovernorProposal(2, IGovernor.ProposalState.Executed);
-
-    run();
-
-    uint256 _proposalId = _hashProposal(_migrationProposal(vetoGovernor));
-    assertEq(uint8(protocolGovernor.state(_proposalId)), uint8(IGovernor.ProposalState.Pending));
   }
 
   function test_RevertIf_TheMigrationProposalAlreadyExists() public {

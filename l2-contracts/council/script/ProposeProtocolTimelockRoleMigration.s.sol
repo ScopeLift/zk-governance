@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {VmSafe} from "forge-std/Vm.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
@@ -21,14 +20,12 @@ import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGoverna
 // and its self-administration are unchanged.
 //
 // Once the proposal executes, `ZkProtocolGovernor` can no longer queue, execute or cancel on the timelock, so any of
-// its other proposals still in flight at that point are stranded. `_inFlightProposals` lists them.
+// its other proposals still in flight at that point are stranded.
 //
 // `run` checks that the deployment is fully configured, that the roles have not moved yet, that the migration has not
 // been proposed already, and that the delegate's votes meet the proposal threshold. It then proposes the migration,
-// simulates its execution against the live chain state, and checks the result. It lists, but does not fail on, other
-// `ZkProtocolGovernor` proposals still in flight, since those may finish before the migration executes. Checking for
-// stranded proposals at execution time is a manual step: list `ZkProtocolGovernor`'s proposals and check each one's
-// `state`.
+// simulates its execution against the live chain state, and checks the result. Checking for stranded proposals at
+// execution time is a manual step: list `ZkProtocolGovernor`'s proposals and check each one's `state`.
 abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGovernanceChecks {
   bytes32 internal constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
   bytes32 internal constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
@@ -45,9 +42,6 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
   // The governor that holds the three roles on the Protocol Timelock before the migration.
   function _protocolGovernor() internal view virtual returns (address);
 
-  // The block of `ZkProtocolGovernor`'s first proposal, from which its `ProposalCreated` logs are scanned.
-  function _protocolGovernorFirstProposalBlock() internal view virtual returns (uint256);
-
   // Proposes the migration from the broadcasting delegate, and simulates and checks its execution.
   function run() public virtual {
     address _vetoGovernor = _deployedVetoGovernor();
@@ -55,9 +49,7 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
 
     Proposal memory _proposal = _migrationProposal(_vetoGovernor);
     uint256 _proposalId = _hashProposal(_proposal);
-    uint256[] memory _proposalIds = _protocolGovernorProposalIds();
-    uint256[] memory _inFlight = _inFlightProposals(_proposalIds, _proposalId);
-    _checkNotAlreadyProposed(_proposalIds, _proposalId);
+    _checkNotAlreadyProposed(_proposalId);
     _checkProposerMeetsThreshold(msg.sender);
 
     // Proposed before the simulation, which pranks `ZkProtocolGovernor` and so must stay out of the broadcast.
@@ -75,7 +67,6 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
     _log(string.concat("Proposal ID: ", vm.toString(bytes32(_proposalId))));
     _log(string.concat("Governor: ", vm.toString(_protocolGovernor())));
     _log(string.concat("Proposed by: ", vm.toString(msg.sender)));
-    _logInFlight(_inFlight);
     _log("Simulated execution: all migration checks passed");
   }
 
@@ -93,27 +84,6 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
   // `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`.
   function _validateExistingDeployment() internal view virtual {
     _validateDeployment(_deploymentParams(), _deploymentFromEnv(), vm.envAddress("DEPLOYER"));
-  }
-
-  // The IDs of every proposal `ZkProtocolGovernor` has created, read from its `ProposalCreated` logs. The RPC endpoint
-  // must serve historical logs.
-  function _protocolGovernorProposalIds() internal virtual returns (uint256[] memory _proposalIds) {
-    bytes32[] memory _topics = new bytes32[](1);
-    _topics[0] = IGovernor.ProposalCreated.selector;
-    VmSafe.EthGetLogs[] memory _logs =
-      vm.eth_getLogs(_protocolGovernorFirstProposalBlock(), block.number, _protocolGovernor(), _topics);
-    // `ZkProtocolGovernor` has made proposals, so no logs means the RPC endpoint does not serve historical logs (e.g. a
-    // local fork), and an empty result would wrongly report that nothing is in flight.
-    if (_logs.length == 0) {
-      revert(
-        "ProposeProtocolTimelockRoleMigration: the RPC returned no ZkProtocolGovernor proposals; use one with history"
-      );
-    }
-    _proposalIds = new uint256[](_logs.length);
-    for (uint256 _i = 0; _i < _logs.length; _i += 1) {
-      // `proposalId` is the first, non-indexed field of `ProposalCreated`.
-      _proposalIds[_i] = abi.decode(_logs[_i].data, (uint256));
-    }
   }
 
   // Builds the migration proposal: grant the three roles to the Veto Governor, then revoke them from
@@ -223,22 +193,23 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
     }
   }
 
-  // Checks that the migration proposal does not exist on `ZkProtocolGovernor` yet, since proposing it again reverts.
-  function _checkNotAlreadyProposed(uint256[] memory _proposalIds, uint256 _migrationProposalId) internal view {
+  // Checks that the migration proposal does not exist on `ZkProtocolGovernor` yet, since proposing it again reverts. A
+  // proposal exists once it has a snapshot.
+  function _checkNotAlreadyProposed(uint256 _migrationProposalId) internal view {
+    IGovernor _governor = IGovernor(_protocolGovernor());
+    if (_governor.proposalSnapshot(_migrationProposalId) == 0) {
+      return;
+    }
     string[8] memory _stateNames =
       ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
-    for (uint256 _i = 0; _i < _proposalIds.length; _i += 1) {
-      if (_proposalIds[_i] == _migrationProposalId) {
-        IGovernor.ProposalState _state = IGovernor(_protocolGovernor()).state(_migrationProposalId);
-        revert(
-          string.concat(
-            "ProposeProtocolTimelockRoleMigration: the migration proposal already exists on ZkProtocolGovernor (",
-            _stateNames[uint8(_state)],
-            ")"
-          )
-        );
-      }
-    }
+    IGovernor.ProposalState _state = _governor.state(_migrationProposalId);
+    revert(
+      string.concat(
+        "ProposeProtocolTimelockRoleMigration: the migration proposal already exists on ZkProtocolGovernor (",
+        _stateNames[uint8(_state)],
+        ")"
+      )
+    );
   }
 
   // Checks that `_proposer` has the votes `ZkProtocolGovernor` requires to propose, counted at the previous block as
@@ -262,58 +233,8 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
     _timelock.executeBatch(_proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), _salt);
   }
 
-  // Lists the `ZkProtocolGovernor` proposals among `_proposalIds`, other than the migration proposal, that still need
-  // the roles the migration revokes: those that are pending, active, succeeded or queued.
-  function _inFlightProposals(uint256[] memory _proposalIds, uint256 _migrationProposalId)
-    internal
-    view
-    returns (uint256[] memory _inFlightIds)
-  {
-    _inFlightIds = new uint256[](_proposalIds.length);
-    uint256 _count = 0;
-    for (uint256 _i = 0; _i < _proposalIds.length; _i += 1) {
-      if (_proposalIds[_i] != _migrationProposalId && _isInFlight(_proposalIds[_i])) {
-        _inFlightIds[_count] = _proposalIds[_i];
-        _count += 1;
-      }
-    }
-    assembly {
-      mstore(_inFlightIds, _count)
-    }
-  }
-
-  // Returns whether a `ZkProtocolGovernor` proposal can still queue, execute or cancel on the timelock. A proposal that
-  // succeeded but was never queued counts, since it could still be queued.
-  function _isInFlight(uint256 _proposalId) internal view returns (bool) {
-    IGovernor.ProposalState _state = IGovernor(_protocolGovernor()).state(_proposalId);
-    return _state == IGovernor.ProposalState.Pending || _state == IGovernor.ProposalState.Active
-      || _state == IGovernor.ProposalState.Succeeded || _state == IGovernor.ProposalState.Queued;
-  }
-
   // The roles the migration moves, in the order they are granted and revoked.
   function _migratedRoles() internal pure returns (bytes32[3] memory) {
     return [PROPOSER_ROLE, EXECUTOR_ROLE, CANCELLER_ROLE];
-  }
-
-  function _logInFlight(uint256[] memory _inFlight) internal view {
-    if (_inFlight.length == 0) {
-      _log("No other ZkProtocolGovernor proposals in flight");
-      return;
-    }
-    _log(
-      string.concat(
-        "WARNING: other ZkProtocolGovernor proposals in flight; they must finish before the migration executes: ",
-        _joinProposalIds(_inFlight)
-      )
-    );
-  }
-
-  function _joinProposalIds(uint256[] memory _proposalIds) internal pure returns (string memory _joined) {
-    for (uint256 _i = 0; _i < _proposalIds.length; _i += 1) {
-      if (_i > 0) {
-        _joined = string.concat(_joined, ", ");
-      }
-      _joined = string.concat(_joined, vm.toString(bytes32(_proposalIds[_i])));
-    }
   }
 }
