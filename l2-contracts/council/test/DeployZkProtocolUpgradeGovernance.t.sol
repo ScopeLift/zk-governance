@@ -8,15 +8,16 @@ import {DeployZkProtocolUpgradeGovernanceEraMainnet} from "script/DeployZkProtoc
 import {ZkProtocolUpgradeDeploymentConfig} from "script/configs/ZkProtocolUpgradeDeploymentConfig.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {FakeSupermajorityGovernor} from "test/fakes/FakeSupermajorityGovernor.sol";
-import {FakeVotesToken} from "test/fakes/FakeVotesToken.sol";
 
-/// @notice Runs the Era mainnet council deployment against test doubles for the contracts it builds on: the ZK token,
-/// the Protocol Timelock, and the Supermajority Governor and override timelock.
+/// @notice Runs the Era mainnet council deployment on a fork of Era mainnet, against the live ZK token and Protocol
+/// Timelock. Only the Supermajority Governor and override timelock, which are not deployed yet, are test doubles.
 /// @dev The test inherits the script and calls `run` internally, rather than deploying the script, so the script's
 /// cheatcodes run in the EVM and its deployments in EraVM under `--zksync`, as they do under `forge script --zksync`.
 contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeGovernanceEraMainnet {
-  FakeVotesToken zkToken;
-  TimelockController protocolTimelock;
+  string constant ZKSYNC_RPC_URL = "https://mainnet.era.zksync.io";
+  // A fork block where the ZK token and the Protocol Timelock are both deployed.
+  uint256 constant FORK_BLOCK = 72_650_000;
+
   TimelockController overrideTimelock;
   FakeSupermajorityGovernor supermajorityGovernor;
   // When set, the params' veto override window is cut to exactly a supermajority override's length, which leaves no
@@ -24,19 +25,23 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
   bool shortenVetoOverrideWindow;
   // When set, the params leave the Veto Governor without a veto guardian.
   bool omitVetoGuardian;
+  // When set, the params' Protocol Timelock is an account with no code.
+  bool useCodelessProtocolTimelock;
   // When set, the account that deployed the Supermajority Governor; otherwise it shares the council deployer.
   address supermajorityGovernorDeployer;
 
   function setUp() public virtual {
-    zkToken = new FakeVotesToken();
-    protocolTimelock = new TimelockController(0, new address[](0), new address[](0), address(this));
+    vm.createSelectFork(ZKSYNC_RPC_URL, FORK_BLOCK);
+    // The default sender pays for the EraVM transactions the script broadcasts.
+    vm.deal(DEFAULT_SENDER, 1 ether);
     _deploySupermajorityGovernor();
     disableLogging();
   }
 
-  // Deploys the override timelock and Supermajority Governor as `DeploySupermajorityGovernor` leaves them: the governor
-  // proposes and cancels, anyone executes, and the timelock administers itself. The test contract keeps OpenZeppelin
-  // v5's admin role, so tests can grant extra roles; it is not the deployer the checks look at.
+  // Deploys test doubles of the override timelock and Supermajority Governor as `DeploySupermajorityGovernor` leaves
+  // them: the governor proposes and cancels, anyone executes, and the timelock administers itself. The real ones are
+  // OpenZeppelin v4 contracts this project cannot build. The test contract keeps OpenZeppelin v5's admin role, so tests
+  // can grant extra roles; it is not the deployer the checks look at.
   function _deploySupermajorityGovernor() internal {
     address[] memory _openExecutor = new address[](1);
     overrideTimelock = new TimelockController(1 days, new address[](0), _openExecutor, address(this));
@@ -86,8 +91,9 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     returns (DeploymentParams memory _params)
   {
     _params = ZkProtocolUpgradeEraMainnetConfig._deploymentParams();
-    _params.zkToken = address(zkToken);
-    _params.protocolTimelock = address(protocolTimelock);
+    if (useCodelessProtocolTimelock) {
+      _params.protocolTimelock = vm.addr(uint256(keccak256("Account Without Code")));
+    }
     if (shortenVetoOverrideWindow) {
       _params.vetoGovernorVetoOverrideDuration = 12 days;
     }
@@ -128,9 +134,9 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
 
   function test_DeploysTheVetoGovernorWithTheZipParameters() public view {
     assertEq(vetoGovernor.name(), "ZKsync Protocol Upgrade Veto Governor");
-    assertEq(address(vetoGovernor.token()), address(zkToken));
+    assertEq(address(vetoGovernor.token()), ZK_TOKEN);
     assertEq(vetoGovernor.COUNCIL(), address(councilGovernor));
-    assertEq(vetoGovernor.timelock(), address(protocolTimelock));
+    assertEq(vetoGovernor.timelock(), PROTOCOL_TIMELOCK);
     assertEq(vetoGovernor.owner(), GOVERNANCE_ADMIN);
     assertEq(vetoGovernor.votingDelay(), 1 days);
     assertEq(vetoGovernor.votingPeriod(), 7 days);
@@ -217,7 +223,7 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
   }
 
   function test_RevertIf_TheProtocolTimelockHasNoCode() public {
-    protocolTimelock = TimelockController(payable(makeAddr("Account Without Code")));
+    useCodelessProtocolTimelock = true;
 
     vm.expectRevert("DeployZkProtocolUpgradeGovernance: protocolTimelock has no code; set it to the Protocol Timelock");
     this.run();
