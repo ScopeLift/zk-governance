@@ -64,20 +64,6 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test, ProposeProtocolTimelo
     protocolGovernorProposalIds.push(_proposalId);
   }
 
-  // Sets the migration proposal's state on the fake `ZkProtocolGovernor`.
-  function _setMigrationProposalState(IGovernor.ProposalState _state) internal {
-    protocolGovernor.setState(_hashProposal(_migrationProposal(vetoGovernor)), _state);
-  }
-
-  // Schedules the migration batch on the timelock, as `ZkProtocolGovernor` does when the proposal is queued.
-  function _queueMigrationProposal() internal {
-    Proposal memory _proposal = _migrationProposal(vetoGovernor);
-    vm.prank(address(protocolGovernor));
-    protocolTimelock.scheduleBatch(
-      _proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), keccak256(bytes(_proposal.description)), 0
-    );
-  }
-
   function _assertRolesMovedToTheVetoGovernor() internal view {
     bytes32[3] memory _roles = _migratedRoles();
     for (uint256 _i = 0; _i < 3; _i += 1) {
@@ -140,76 +126,19 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
     );
     this.run();
   }
-}
-
-contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
-  function test_PassesOnceTheMigrationProposalSucceedsBeforeItIsQueued() public {
-    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
-
-    checkReadyToExecute();
-
-    _assertRolesMovedToTheVetoGovernor();
-  }
-
-  function test_PassesOnceTheMigrationProposalIsQueued() public {
-    _setMigrationProposalState(IGovernor.ProposalState.Queued);
-    _queueMigrationProposal();
-
-    checkReadyToExecute();
-
-    _assertRolesMovedToTheVetoGovernor();
-  }
-
-  function test_IgnoresProposalsThatCanNoLongerUseTheRoles() public {
-    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
-    _addProtocolGovernorProposal(1, IGovernor.ProposalState.Defeated);
-    _addProtocolGovernorProposal(2, IGovernor.ProposalState.Canceled);
-    _addProtocolGovernorProposal(3, IGovernor.ProposalState.Executed);
-
-    checkReadyToExecute();
-
-    _assertRolesMovedToTheVetoGovernor();
-  }
-
-  function test_RevertIf_OtherProposalsArePendingOrQueued() public {
-    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
-    _addProtocolGovernorProposal(7, IGovernor.ProposalState.Pending);
-    _addProtocolGovernorProposal(8, IGovernor.ProposalState.Queued);
-
-    vm.expectRevert(
-      bytes(
-        string.concat(
-          "ProposeProtocolTimelockRoleMigration: other ZkProtocolGovernor proposals are in flight: ",
-          vm.toString(bytes32(uint256(7))),
-          ", ",
-          vm.toString(bytes32(uint256(8)))
-        )
-      )
-    );
-    this.checkReadyToExecute();
-  }
-
-  function test_RevertIf_TheMigrationProposalHasNotPassed() public {
-    _setMigrationProposalState(IGovernor.ProposalState.Active);
-
-    vm.expectRevert(
-      "ProposeProtocolTimelockRoleMigration: the migration proposal has not passed on ZkProtocolGovernor"
-    );
-    this.checkReadyToExecute();
-  }
 
   function test_RevertIf_TheVetoGovernorAlreadyHoldsARole() public {
     protocolTimelock.grantRole(PROPOSER_ROLE, vetoGovernor);
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: the Veto Governor already holds a Protocol Timelock role");
-    this.checkReadyToExecute();
+    this.run();
   }
 
   function test_RevertIf_ZkProtocolGovernorDoesNotUseTheProtocolTimelock() public {
     protocolGovernor = new FakeProtocolGovernor(makeAddr("Other Timelock"));
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor does not use the Protocol Timelock");
-    this.checkReadyToExecute();
+    this.run();
   }
 
   function test_RevertIf_ZkProtocolGovernorIsMissingARole() public {
@@ -218,21 +147,20 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
     vm.expectRevert(
       "ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor is missing a Protocol Timelock role it should hold"
     );
-    this.checkReadyToExecute();
+    this.run();
   }
 
   function test_RevertIf_AGovernorWouldAdministerTheTimelockAfterTheMigration() public {
-    _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
     protocolTimelock.grantRole(TIMELOCK_ADMIN_ROLE, vetoGovernor);
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: a governor administers the Protocol Timelock");
-    this.checkReadyToExecute();
+    this.run();
   }
 
   function test_RevertIf_ARoleIsOpenToEveryAccount() public {
     protocolTimelock.grantRole(CANCELLER_ROLE, address(0));
 
     vm.expectRevert("ProposeProtocolTimelockRoleMigration: a Protocol Timelock role is open to every account");
-    this.checkReadyToExecute();
+    this.run();
   }
 }

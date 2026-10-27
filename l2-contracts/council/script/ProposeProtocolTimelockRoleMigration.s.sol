@@ -11,8 +11,8 @@ import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGoverna
 
 // Proposes, from the broadcasting delegate, the `ZkProtocolGovernor` proposal that moves the proposer, executor and
 // canceller roles on the Protocol Timelock from `ZkProtocolGovernor` to `ZkProtocolUpgradeVetoGovernor`. The proposal
-// ID depends on the exact description, so proposing from the script keeps the description on chain, and with it the ID
-// `checkReadyToExecute` looks for, exactly as built here.
+// ID depends on the exact description, so proposing from the script keeps the description on chain, and with it the ID,
+// exactly as built here.
 //
 // The Protocol Timelock is an OpenZeppelin v4 `TimelockController` that administers itself, so the proposal's calls
 // target the timelock directly and run with the timelock as `msg.sender`. All three roles are granted to the Veto
@@ -27,11 +27,9 @@ import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGoverna
 // `run` checks that the deployment is fully configured, that the roles have not moved yet, that the migration has not
 // been proposed already, and that the delegate's votes meet the proposal threshold. It then proposes the migration,
 // simulates its execution against the live chain state, and checks the result. It lists, but does not fail on, other
-// `ZkProtocolGovernor` proposals still in flight, since those may finish before the migration executes.
-//
-// `checkReadyToExecute` repeats the checks just before the migration proposal executes, whether or not it is queued
-// yet. It also fails unless the migration proposal has passed on `ZkProtocolGovernor`, and if any other
-// `ZkProtocolGovernor` proposal is still in flight, since executing the migration would strand it.
+// `ZkProtocolGovernor` proposals still in flight, since those may finish before the migration executes. Checking for
+// stranded proposals at execution time is a manual step: list `ZkProtocolGovernor`'s proposals and check each one's
+// `state`.
 abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGovernanceChecks {
   bytes32 internal constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
   bytes32 internal constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
@@ -80,31 +78,6 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
     _log(string.concat("Proposed by: ", vm.toString(msg.sender)));
     _logInFlight(_inFlight);
     _log("Simulated execution: all migration checks passed");
-  }
-
-  // Checks that the migration proposal can execute without stranding another `ZkProtocolGovernor` proposal, and that
-  // executing it now ends in the expected state.
-  function checkReadyToExecute() public virtual {
-    address _vetoGovernor = _deployedVetoGovernor();
-    _checkBeforeMigration(_vetoGovernor);
-
-    Proposal memory _proposal = _migrationProposal(_vetoGovernor);
-    uint256 _proposalId = _hashProposal(_proposal);
-    _checkMigrationProposalPassed(_proposalId);
-    uint256[] memory _inFlight = _inFlightProposals(_protocolGovernorProposalIds(), _proposalId);
-    _logInFlight(_inFlight);
-    if (_inFlight.length != 0) {
-      revert(
-        string.concat(
-          "ProposeProtocolTimelockRoleMigration: other ZkProtocolGovernor proposals are in flight: ",
-          _joinProposalIds(_inFlight)
-        )
-      );
-    }
-
-    _simulateMigration(_proposal);
-    _checkAfterMigration(_vetoGovernor);
-    _log("Ready to execute: all migration checks passed");
   }
 
   // The Protocol Timelock, the timelock the Veto Governor queues and executes through.
@@ -183,15 +156,6 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
       .hashProposal(_proposal.targets, _proposal.values, _proposal.calldatas, keccak256(bytes(_proposal.description)));
   }
 
-  // The ID of the batch operation `ZkProtocolGovernor` schedules on the Protocol Timelock when it queues a proposal.
-  // OpenZeppelin v4's `GovernorTimelockControl` uses no predecessor and the description hash as the salt.
-  function _timelockOperationId(Proposal memory _proposal) internal view returns (bytes32) {
-    return _protocolTimelock()
-      .hashOperationBatch(
-        _proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), keccak256(bytes(_proposal.description))
-      );
-  }
-
   // Checks the state the migration starts from: the council governance is fully deployed and configured,
   // `ZkProtocolGovernor` uses the Protocol Timelock and holds the three roles, the Veto Governor holds none, and the
   // timelock administers itself with no delay.
@@ -214,15 +178,6 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
       }
     }
     _checkProtocolTimelockSettings();
-  }
-
-  // Checks that the migration proposal exists on `ZkProtocolGovernor` with the ID built here, and has passed: it is
-  // succeeded and not yet queued, or queued. Any difference in its actions or description would give it another ID.
-  function _checkMigrationProposalPassed(uint256 _migrationProposalId) internal view {
-    IGovernor.ProposalState _state = IGovernor(_protocolGovernor()).state(_migrationProposalId);
-    if (_state != IGovernor.ProposalState.Succeeded && _state != IGovernor.ProposalState.Queued) {
-      revert("ProposeProtocolTimelockRoleMigration: the migration proposal has not passed on ZkProtocolGovernor");
-    }
   }
 
   // Checks the state the migration ends in: the Veto Governor holds the three roles, `ZkProtocolGovernor` holds none,
@@ -297,16 +252,13 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
   }
 
   // Executes the migration proposal on the current chain state the way `ZkProtocolGovernor` does once it passes: as a
-  // timelock batch, scheduled when the proposal is queued and then executed by the governor. If the proposal is already
-  // queued, its batch is already scheduled, and only the execution is simulated. For simulation only: it pranks
-  // `ZkProtocolGovernor`, so it must not run while broadcasting.
+  // timelock batch, scheduled when the proposal is queued and then executed by the governor. For simulation only: it
+  // pranks `ZkProtocolGovernor`, so it must not run while broadcasting.
   function _simulateMigration(Proposal memory _proposal) internal {
     TimelockController _timelock = _protocolTimelock();
     bytes32 _salt = keccak256(bytes(_proposal.description));
-    if (!_timelock.isOperation(_timelockOperationId(_proposal))) {
-      vm.prank(_protocolGovernor());
-      _timelock.scheduleBatch(_proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), _salt, 0);
-    }
+    vm.prank(_protocolGovernor());
+    _timelock.scheduleBatch(_proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), _salt, 0);
     vm.prank(_protocolGovernor());
     _timelock.executeBatch(_proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), _salt);
   }
@@ -373,9 +325,8 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
 // `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`:
 // `forge script script/ProposeProtocolTimelockRoleMigration.s.sol:ProposeProtocolTimelockRoleMigrationEraMainnet
 // --zksync --rpc-url <era-rpc> --broadcast --account <delegate-keystore-account> --sender <delegate-address>`, where the
-// delegate's votes meet `ZkProtocolGovernor`'s proposal threshold. Run it with `--sig "checkReadyToExecute()"` and
-// without `--broadcast` right before execution. The RPC endpoint must serve historical logs, which local forks usually
-// do not.
+// delegate's votes meet `ZkProtocolGovernor`'s proposal threshold. The RPC endpoint must serve historical logs, which
+// local forks usually do not.
 contract ProposeProtocolTimelockRoleMigrationEraMainnet is
   ProposeProtocolTimelockRoleMigration,
   ZkProtocolUpgradeEraMainnetConfig
