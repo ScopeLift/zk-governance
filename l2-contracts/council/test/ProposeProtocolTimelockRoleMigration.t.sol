@@ -192,21 +192,23 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
   function test_RevertIf_TheMigrationProposalHasNotPassed() public {
     _setMigrationProposalState(IGovernor.ProposalState.Active);
 
-    vm.expectRevert("ProtocolTimelockRoleMigration: the migration proposal has not passed on ZkProtocolGovernor");
+    vm.expectRevert(
+      "ProposeProtocolTimelockRoleMigration: the migration proposal has not passed on ZkProtocolGovernor"
+    );
     this.checkReadyToExecute();
   }
 
   function test_RevertIf_TheVetoGovernorAlreadyHoldsARole() public {
     protocolTimelock.grantRole(PROPOSER_ROLE, vetoGovernor);
 
-    vm.expectRevert("ProtocolTimelockRoleMigration: the Veto Governor already holds a Protocol Timelock role");
+    vm.expectRevert("ProposeProtocolTimelockRoleMigration: the Veto Governor already holds a Protocol Timelock role");
     this.checkReadyToExecute();
   }
 
   function test_RevertIf_ZkProtocolGovernorDoesNotUseTheProtocolTimelock() public {
     protocolGovernor = new FakeProtocolGovernor(makeAddr("Other Timelock"));
 
-    vm.expectRevert("ProtocolTimelockRoleMigration: ZkProtocolGovernor does not use the Protocol Timelock");
+    vm.expectRevert("ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor does not use the Protocol Timelock");
     this.checkReadyToExecute();
   }
 
@@ -214,7 +216,7 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
     protocolTimelock.revokeRole(EXECUTOR_ROLE, address(protocolGovernor));
 
     vm.expectRevert(
-      "ProtocolTimelockRoleMigration: ZkProtocolGovernor is missing a Protocol Timelock role it should hold"
+      "ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor is missing a Protocol Timelock role it should hold"
     );
     this.checkReadyToExecute();
   }
@@ -223,14 +225,14 @@ contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {
     _setMigrationProposalState(IGovernor.ProposalState.Succeeded);
     protocolTimelock.grantRole(TIMELOCK_ADMIN_ROLE, vetoGovernor);
 
-    vm.expectRevert("ProtocolTimelockRoleMigration: a governor administers the Protocol Timelock");
+    vm.expectRevert("ProposeProtocolTimelockRoleMigration: a governor administers the Protocol Timelock");
     this.checkReadyToExecute();
   }
 
   function test_RevertIf_ARoleIsOpenToEveryAccount() public {
     protocolTimelock.grantRole(CANCELLER_ROLE, address(0));
 
-    vm.expectRevert("ProtocolTimelockRoleMigration: a Protocol Timelock role is open to every account");
+    vm.expectRevert("ProposeProtocolTimelockRoleMigration: a Protocol Timelock role is open to every account");
     this.checkReadyToExecute();
   }
 }
