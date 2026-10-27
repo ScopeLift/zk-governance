@@ -7,10 +7,10 @@ import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
 import {SupermajorityGovernorChecks} from "council/script/SupermajorityGovernorChecks.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/ZkProtocolUpgradeEraMainnetConfig.sol";
 
-// Step 1 of 2. Deploys the ZKsync Supermajority Governor and its override timelock. Step 2 is
+// Deploys the ZKsync Supermajority Governor and its override timelock. Run this before
 // `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council`, which deploys the council contracts and makes this
-// override timelock the Veto Governor's `vetoOverrideRole`. If step 2 is run from a different account, pass this
-// script's deployer to it as `STEP_ONE_DEPLOYER`.
+// override timelock the Veto Governor's `vetoOverrideRole`. If that script is run from a different account, pass this
+// script's deployer to it as `SUPERMAJORITY_GOVERNOR_DEPLOYER`.
 //
 // The Supermajority Governor is the existing `ZkProtocolGovernor`, deployed unchanged: its quorum counts FOR votes only
 // and a proposal succeeds only with more FOR than AGAINST votes, which are the ZIP's supermajority rules. It and the
@@ -26,7 +26,7 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 
   function run() public virtual {
     DeploymentParams memory _params = _deploymentParams();
-    _validateStepOneParams(_params);
+    _validateSupermajorityGovernorParams(_params);
     _logDeploymentParams(_params);
 
     vm.startBroadcast();
@@ -67,19 +67,21 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 
     vm.stopBroadcast();
 
-    _validateStepOneContracts(_params, address(governor), address(timelock), _deployer);
+    _validateSupermajorityGovernorContracts(_params, address(governor), address(timelock), _deployer);
 
     _log(string.concat("Supermajority Governor (SUPERMAJORITY_GOVERNOR): ", vm.toString(address(governor))));
     _log(string.concat("Override TimelockController (OVERRIDE_TIMELOCK): ", vm.toString(address(timelock))));
   }
 
-  // Runs the same checks against an existing step 1 deployment, reading `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK`
-  // and `DEPLOYER`, the account that ran step 1.
+  // Runs the same checks against an existing Supermajority Governor deployment, reading `SUPERMAJORITY_GOVERNOR`,
+  // `OVERRIDE_TIMELOCK` and `DEPLOYER`, the account that ran this script.
   function check() public virtual {
     governor = ZkProtocolGovernor(payable(vm.envAddress("SUPERMAJORITY_GOVERNOR")));
     timelock = TimelockController(payable(vm.envAddress("OVERRIDE_TIMELOCK")));
-    _validateStepOneContracts(_deploymentParams(), address(governor), address(timelock), vm.envAddress("DEPLOYER"));
-    _log("All step 1 deployment checks passed");
+    _validateSupermajorityGovernorContracts(
+      _deploymentParams(), address(governor), address(timelock), vm.envAddress("DEPLOYER")
+    );
+    _log("All Supermajority Governor deployment checks passed");
   }
 
   function _logDeploymentParams(DeploymentParams memory _params) internal view {
@@ -102,8 +104,8 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
 // Usage, from `l2-contracts`, with the deployer passed through the usual forge wallet options, e.g. `--account`:
 // `forge script script/DeploySupermajorityGovernor.s.sol:DeploySupermajorityGovernorEraMainnet --zksync
 // --rpc-url <era-rpc> --broadcast`
-// Omit `--broadcast` for a dry run. Pass the logged addresses to step 2 as `SUPERMAJORITY_GOVERNOR` and
-// `OVERRIDE_TIMELOCK`. After broadcasting, add `--sig "check()"` with those two and `DEPLOYER` set to check the
+// Omit `--broadcast` for a dry run. Pass the logged addresses to `DeployZkProtocolUpgradeGovernance` as
+// `SUPERMAJORITY_GOVERNOR` and `OVERRIDE_TIMELOCK`. After broadcasting, add `--sig "check()"` with those two and `DEPLOYER` set to check the
 // deployment on chain.
 contract DeploySupermajorityGovernorEraMainnet is DeploySupermajorityGovernor, ZkProtocolUpgradeEraMainnetConfig {
   // Script entrypoint

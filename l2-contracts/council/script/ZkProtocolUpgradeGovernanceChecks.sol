@@ -15,8 +15,8 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     CouncilERC20 councilToken;
     ZkProtocolUpgradeCouncilGovernor councilGovernor;
     ZkProtocolUpgradeVetoGovernor vetoGovernor;
-    // From step 1. The override timelock is an OpenZeppelin v4 `TimelockController`, read through the v5 type, whose
-    // ABI matches for the functions used here; its admin role is `TIMELOCK_ADMIN_ROLE`.
+    // From `DeploySupermajorityGovernor`. The override timelock is an OpenZeppelin v4 `TimelockController`, read
+    // through the v5 type, whose ABI matches for the functions used here; its admin role is `TIMELOCK_ADMIN_ROLE`.
     address supermajorityGovernor;
     TimelockController overrideTimelock;
   }
@@ -34,18 +34,21 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
   }
 
   // Runs every check against a deployment whose council contracts were deployed by `_deployer` and whose Supermajority
-  // Governor and override timelock were deployed by `_stepOneDeployer`.
+  // Governor and override timelock were deployed by `_supermajorityGovernorDeployerAccount`.
   function _validateDeployment(
     DeploymentParams memory _params,
     Deployment memory _deployment,
     address _deployer,
-    address _stepOneDeployer
+    address _supermajorityGovernorDeployerAccount
   ) internal view {
     _validateCouncilToken(_params, _deployment);
     _validateCouncilGovernor(_params, _deployment);
     _validateVetoGovernor(_params, _deployment, _deployer);
-    _validateStepOneContracts(
-      _params, _deployment.supermajorityGovernor, address(_deployment.overrideTimelock), _stepOneDeployer
+    _validateSupermajorityGovernorContracts(
+      _params,
+      _deployment.supermajorityGovernor,
+      address(_deployment.overrideTimelock),
+      _supermajorityGovernorDeployerAccount
     );
   }
 

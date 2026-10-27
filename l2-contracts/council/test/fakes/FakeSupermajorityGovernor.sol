@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-// Stands in for step 1's Supermajority Governor, which is an OpenZeppelin v4 contract this project cannot deploy. It
+// Stands in for the Supermajority Governor, which is an OpenZeppelin v4 contract this project cannot deploy. It
 // reports the settings the deployment checks read, as a deployed governor would.
 contract FakeSupermajorityGovernor {
   struct Settings {

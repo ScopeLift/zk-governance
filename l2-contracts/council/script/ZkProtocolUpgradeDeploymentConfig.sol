@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// The parameters of the ZKsync protocol upgrade governance deployment, shared by both deploy steps:
+// The parameters of the ZKsync protocol upgrade governance deployment, shared by both deploy scripts:
 // `DeploySupermajorityGovernor` in the main l2-contracts project (solc 0.8.24, OpenZeppelin v4) and
 // `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council` (solc 0.8.30, OpenZeppelin v5). It compiles under both,
 // so it uses only plain types. A concrete configuration such as `ZkProtocolUpgradeEraMainnetConfig` supplies the
 // values.
 //
-// The Supermajority Governor and override timelock addresses are outputs of step 1, so they are not params: step 2
-// reads them from the environment.
+// The Supermajority Governor and override timelock addresses are outputs of `DeploySupermajorityGovernor`, so they are
+// not params: `DeployZkProtocolUpgradeGovernance` reads them from the environment.
 abstract contract ZkProtocolUpgradeDeploymentConfig {
   struct DeploymentParams {
     // Existing contracts.

@@ -4,8 +4,8 @@ pragma solidity ^0.8.24;
 import {DeployBase} from "./DeployBase.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "./ZkProtocolUpgradeDeploymentConfig.sol";
 
-// The parts of `ZkProtocolGovernor` the checks read. Step 1 deploys it as the Supermajority Governor; the council
-// project cannot import it, since it is built on OpenZeppelin v4.
+// The parts of `ZkProtocolGovernor` the checks read. `DeploySupermajorityGovernor` deploys it as the Supermajority
+// Governor; the council project cannot import it, since it is built on OpenZeppelin v4.
 interface IZkProtocolGovernor {
   function name() external view returns (string memory);
   function token() external view returns (address);
@@ -27,13 +27,15 @@ interface ITimelockRoles {
   function hasRole(bytes32 _role, address _account) external view returns (bool);
 }
 
-// Checks the contracts step 1 deploys, the Supermajority Governor and its override timelock, against the params. Step 1
-// runs these checks after deploying, and step 2 runs them before deploying anything. They use only interfaces, so both
-// l2-contracts projects compile the same checks.
+// Checks the Supermajority Governor and its override timelock against the params. `DeploySupermajorityGovernor` runs
+// these checks after deploying them, and `DeployZkProtocolUpgradeGovernance` runs them before deploying anything. They
+// use only interfaces, so both l2-contracts projects compile the same checks.
 abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDeploymentConfig {
-  // Rejects params that would deploy step 1's contracts in a form step 2 can't use. Both steps run it before deploying,
-  // so step 1 fails before broadcasting rather than leaving contracts step 2 would refuse.
-  function _validateStepOneParams(DeploymentParams memory _params) internal view {
+  // Rejects params that would deploy a Supermajority Governor and override timelock in a form
+  // `DeployZkProtocolUpgradeGovernance` can't use. Both deploy scripts run it before deploying, so
+  // `DeploySupermajorityGovernor` fails before broadcasting rather than leaving contracts the council deployment would
+  // refuse.
+  function _validateSupermajorityGovernorParams(DeploymentParams memory _params) internal view {
     if (_params.zkToken.code.length == 0) {
       revert("SupermajorityGovernorChecks: zkToken has no code; set it to the ZK token");
     }
@@ -50,7 +52,7 @@ abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDe
   }
 
   // Runs every check of the Supermajority Governor and override timelock deployed by `_deployer`.
-  function _validateStepOneContracts(
+  function _validateSupermajorityGovernorContracts(
     DeploymentParams memory _params,
     address _supermajorityGovernor,
     address _overrideTimelock,

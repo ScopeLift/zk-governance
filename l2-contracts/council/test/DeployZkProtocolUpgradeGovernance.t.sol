@@ -12,8 +12,8 @@ import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMain
 import {FakeSupermajorityGovernor} from "test/fakes/FakeSupermajorityGovernor.sol";
 import {FakeVotesToken} from "test/fakes/FakeVotesToken.sol";
 
-/// @notice Runs the Era mainnet step 2 deployment against test doubles for the contracts it builds on: the ZK token,
-/// the Protocol Timelock, and step 1's Supermajority Governor and override timelock.
+/// @notice Runs the Era mainnet council deployment against test doubles for the contracts it builds on: the ZK token,
+/// the Protocol Timelock, and the Supermajority Governor and override timelock.
 /// @dev The test inherits the script and calls `run` internally, rather than deploying the script, so the script's
 /// cheatcodes run in the EVM and its deployments in EraVM under `--zksync`, as they do under `forge script --zksync`.
 contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeGovernanceEraMainnet {
@@ -26,20 +26,20 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
   bool shortenVetoOverrideWindow;
   // When set, the params leave the Veto Governor without a veto guardian.
   bool omitVetoGuardian;
-  // When set, the account that ran step 1; otherwise step 1 shares step 2's deployer.
-  address stepOneDeployer;
+  // When set, the account that deployed the Supermajority Governor; otherwise it shares the council deployer.
+  address supermajorityGovernorDeployer;
 
   function setUp() public virtual {
     zkToken = new FakeVotesToken();
     protocolTimelock = new TimelockController(0, new address[](0), new address[](0), address(this));
-    _deployStepOne();
+    _deploySupermajorityGovernor();
     disableLogging();
   }
 
-  // Deploys the override timelock and Supermajority Governor as step 1 leaves them: the governor proposes and cancels,
-  // anyone executes, and the timelock administers itself. The test contract keeps OpenZeppelin v5's admin role, so
-  // tests can grant extra roles; it is not the deployer the checks look at.
-  function _deployStepOne() internal {
+  // Deploys the override timelock and Supermajority Governor as `DeploySupermajorityGovernor` leaves them: the governor
+  // proposes and cancels, anyone executes, and the timelock administers itself. The test contract keeps OpenZeppelin
+  // v5's admin role, so tests can grant extra roles; it is not the deployer the checks look at.
+  function _deploySupermajorityGovernor() internal {
     address[] memory _openExecutor = new address[](1);
     overrideTimelock = new TimelockController(1 days, new address[](0), _openExecutor, address(this));
     supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(address(overrideTimelock)));
@@ -49,7 +49,8 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, address(overrideTimelock));
   }
 
-  // The settings step 1 gives the Supermajority Governor, from the same params step 2 checks it against.
+  // The settings `DeploySupermajorityGovernor` gives the Supermajority Governor, from the same params the council
+  // deployment checks it against.
   function _supermajorityGovernorSettings(address _timelock)
     internal
     view
@@ -68,15 +69,16 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     });
   }
 
-  // Supplies step 1's contracts directly. Environment variables are shared by tests running in parallel, so only the
-  // `check` test, which reads an existing deployment the way the script does, sets them.
-  function _stepOneContracts() internal view override returns (address, TimelockController) {
+  // Supplies the Supermajority Governor and override timelock directly. Environment variables are shared by tests
+  // running in parallel, so only the `check` test, which reads an existing deployment the way the script does, sets
+  // them.
+  function _supermajorityGovernorContracts() internal view override returns (address, TimelockController) {
     return (address(supermajorityGovernor), overrideTimelock);
   }
 
-  // Supplies step 1's deployer directly, for the same reason.
-  function _stepOneDeployer(address _default) internal view virtual override returns (address) {
-    return stepOneDeployer != address(0) ? stepOneDeployer : _default;
+  // Supplies the Supermajority Governor's deployer directly, for the same reason.
+  function _supermajorityGovernorDeployer(address _default) internal view virtual override returns (address) {
+    return supermajorityGovernorDeployer != address(0) ? supermajorityGovernorDeployer : _default;
   }
 
   function _deploymentParams()
@@ -149,8 +151,8 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
     assertTrue(vetoGovernor.owner() != DEFAULT_SENDER);
   }
 
-  function test_DeploysWhenStepOneUsedADifferentDeployer() public {
-    stepOneDeployer = makeAddr("Step 1 Deployer");
+  function test_DeploysWhenTheSupermajorityGovernorHasADifferentDeployer() public {
+    supermajorityGovernorDeployer = makeAddr("Supermajority Governor Deployer");
 
     run();
 
@@ -159,13 +161,13 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
 }
 
 contract Check is DeployZkProtocolUpgradeGovernanceTest {
-  // Reads step 1's deployer from `STEP_ONE_DEPLOYER`, as the script does.
-  function _stepOneDeployer(address _default) internal view override returns (address) {
-    return DeployZkProtocolUpgradeGovernance._stepOneDeployer(_default);
+  // Reads the Supermajority Governor's deployer from `SUPERMAJORITY_GOVERNOR_DEPLOYER`, as the script does.
+  function _supermajorityGovernorDeployer(address _default) internal view override returns (address) {
+    return DeployZkProtocolUpgradeGovernance._supermajorityGovernorDeployer(_default);
   }
 
   function test_PassesForTheDeploymentRunMade() public {
-    vm.setEnv("STEP_ONE_DEPLOYER", vm.toString(makeAddr("Step 1 Deployer")));
+    vm.setEnv("SUPERMAJORITY_GOVERNOR_DEPLOYER", vm.toString(makeAddr("Supermajority Governor Deployer")));
     run();
     vm.setEnv("SUPERMAJORITY_GOVERNOR", vm.toString(address(supermajorityGovernor)));
     vm.setEnv("OVERRIDE_TIMELOCK", vm.toString(address(overrideTimelock)));
@@ -239,9 +241,9 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     this.run();
   }
 
-  function test_RevertIf_TheStepOneDeployerHoldsARoleOnTheOverrideTimelock() public {
-    stepOneDeployer = makeAddr("Step 1 Deployer");
-    overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), stepOneDeployer);
+  function test_RevertIf_TheSupermajorityGovernorDeployerHoldsARoleOnTheOverrideTimelock() public {
+    supermajorityGovernorDeployer = makeAddr("Supermajority Governor Deployer");
+    overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), supermajorityGovernorDeployer);
 
     vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
     this.run();
