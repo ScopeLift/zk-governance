@@ -8,9 +8,9 @@ import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
 import {ERC20VotesFake} from "test/fakes/ERC20VotesFake.sol";
 
-/// @notice Tests `ZkProtocolGovernor` configured as a supermajority governor with a 1.26B quorum. A proposal must reach
-/// the quorum in FOR votes alone, with ABSTAIN votes not counting toward it, and must have more FOR than AGAINST votes.
-contract ZkProtocolGovernorSupermajorityTest is Test {
+/// @notice Tests the Supermajority Governor. A proposal succeeds only if its FOR votes alone reach the 1.26B quorum,
+/// with ABSTAIN votes not counting toward it, and it has more FOR than AGAINST votes.
+contract ZKSupermajorityTest is Test {
   uint224 constant QUORUM = 1_260_000_000e18;
   uint256 constant MAX_VOTES = 10 * uint256(QUORUM);
 
@@ -99,7 +99,7 @@ contract ZkProtocolGovernorSupermajorityTest is Test {
   }
 }
 
-contract SupermajorityState is ZkProtocolGovernorSupermajorityTest {
+contract State is ZKSupermajorityTest {
   function testFuzz_SucceedsWhenForVotesMeetQuorumAndExceedAgainstVotes(
     uint256 _forVotes,
     uint256 _againstVotes,
