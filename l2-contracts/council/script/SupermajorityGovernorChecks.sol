@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {DeployBase} from "./DeployBase.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "./configs/ZkProtocolUpgradeDeploymentConfig.sol";
-import {ITimelockRoles} from "./interfaces/ITimelockRoles.sol";
 import {IZkProtocolGovernor} from "./interfaces/IZkProtocolGovernor.sol";
 
 // Checks the Supermajority Governor and its override timelock against the params. `DeploySupermajorityGovernor` runs
-// these checks after deploying them, and `DeployZkProtocolUpgradeGovernance` runs them before deploying anything. They
-// use only interfaces, so both l2-contracts projects compile the same checks.
+// these checks after deploying them, and `DeployZkProtocolUpgradeGovernance` runs them before deploying anything. Both
+// l2-contracts projects compile the same checks: the governor is read through an interface, and the timelock through
+// whichever OpenZeppelin `TimelockController` the project maps, v4 or v5, since the checks call only functions both
+// versions share.
 abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDeploymentConfig {
   // Rejects params that would deploy a Supermajority Governor and override timelock in a form
   // `DeployZkProtocolUpgradeGovernance` can't use. Both deploy scripts run it before deploying, so
@@ -41,7 +43,9 @@ abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDe
       revert("SupermajorityGovernorChecks: the Supermajority Governor or override timelock is not deployed");
     }
     _validateSupermajorityGovernor(_params, IZkProtocolGovernor(_supermajorityGovernor), _overrideTimelock);
-    _validateOverrideTimelock(_params, ITimelockRoles(_overrideTimelock), _supermajorityGovernor, _deployer);
+    _validateOverrideTimelock(
+      _params, TimelockController(payable(_overrideTimelock)), _supermajorityGovernor, _deployer
+    );
   }
 
   function _validateSupermajorityGovernor(
@@ -79,7 +83,7 @@ abstract contract SupermajorityGovernorChecks is DeployBase, ZkProtocolUpgradeDe
   // canceller, that anyone can execute, that it administers itself, and that `_deployer` holds no role on it.
   function _validateOverrideTimelock(
     DeploymentParams memory _params,
-    ITimelockRoles _timelock,
+    TimelockController _timelock,
     address _supermajorityGovernor,
     address _deployer
   ) internal view {
