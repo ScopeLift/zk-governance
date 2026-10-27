@@ -3,39 +3,42 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {DeployZkProtocolUpgradeGovernance} from "script/DeployZkProtocolUpgradeGovernance.s.sol";
-import {DeployZkProtocolUpgradeGovernanceEraMainnet} from "script/DeployZkProtocolUpgradeGovernanceEraMainnet.s.sol";
+import {CouncilERC20} from "council-governance/CouncilERC20.sol";
+import {ZkProtocolUpgradeCouncilGovernor} from "src/ZkProtocolUpgradeCouncilGovernor.sol";
+import {ZkProtocolUpgradeVetoGovernor} from "src/ZkProtocolUpgradeVetoGovernor.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "script/configs/ZkProtocolUpgradeDeploymentConfig.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {FakeSupermajorityGovernor} from "test/fakes/FakeSupermajorityGovernor.sol";
+import {
+  DeployZkProtocolUpgradeGovernanceEraMainnetHarness
+} from "test/harnesses/DeployZkProtocolUpgradeGovernanceHarness.sol";
+
+interface IZkCheatcodes {
+  function zkVmSkip() external;
+}
 
 /// @notice Runs the Era mainnet council deployment on a fork of Era mainnet, against the live ZK token and Protocol
 /// Timelock. Only the Supermajority Governor and override timelock, which are not deployed yet, are test doubles.
-/// @dev The test inherits the script and calls `run` internally, rather than deploying the script, so the script's
-/// cheatcodes run in the EVM and its deployments in EraVM under `--zksync`, as they do under `forge script --zksync`.
-contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeGovernanceEraMainnet {
+/// @dev The script is deployed behind `zkVmSkip`, so under `--zksync` it lands in the EVM, where its cheatcodes work,
+/// as `forge script --zksync` runs it.
+contract DeployZkProtocolUpgradeGovernanceTest is Test {
   string constant ZKSYNC_RPC_URL = "https://mainnet.era.zksync.io";
   // A fork block where the ZK token and the Protocol Timelock are both deployed.
   uint256 constant FORK_BLOCK = 72_650_000;
+  // The real override timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
+  bytes32 constant TIMELOCK_ADMIN_ROLE = keccak256("TIMELOCK_ADMIN_ROLE");
 
+  DeployZkProtocolUpgradeGovernanceEraMainnetHarness script;
   TimelockController overrideTimelock;
   FakeSupermajorityGovernor supermajorityGovernor;
-  // When set, the params' veto override window is cut to exactly a supermajority override's length, which leaves no
-  // time to queue and execute it.
-  bool shortenVetoOverrideWindow;
-  // When set, the params leave the Veto Governor without a veto guardian.
-  bool omitVetoGuardian;
-  // When set, the params' Protocol Timelock is an account with no code.
-  bool useCodelessProtocolTimelock;
-  // When set, the account that deployed the Supermajority Governor; otherwise it shares the council deployer.
-  address supermajorityGovernorDeployer;
 
   function setUp() public virtual {
     vm.createSelectFork(ZKSYNC_RPC_URL, FORK_BLOCK);
     // The default sender pays for the EraVM transactions the script broadcasts.
     vm.deal(DEFAULT_SENDER, 1 ether);
+    IZkCheatcodes(address(vm)).zkVmSkip();
+    script = new DeployZkProtocolUpgradeGovernanceEraMainnetHarness();
+    script.disableLogging();
     _deploySupermajorityGovernor();
-    disableLogging();
   }
 
   // Deploys test doubles of the override timelock and Supermajority Governor as `DeploySupermajorityGovernor` leaves
@@ -48,8 +51,8 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(address(overrideTimelock)));
     overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), address(supermajorityGovernor));
     overrideTimelock.grantRole(overrideTimelock.CANCELLER_ROLE(), address(supermajorityGovernor));
-    // The real override timelock is OpenZeppelin v4, whose admin role is TIMELOCK_ADMIN_ROLE.
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, address(overrideTimelock));
+    script.setSupermajorityGovernorContracts(address(supermajorityGovernor), overrideTimelock);
   }
 
   // The settings `DeploySupermajorityGovernor` gives the Supermajority Governor, from the same params the council
@@ -59,7 +62,7 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
     view
     returns (FakeSupermajorityGovernor.Settings memory)
   {
-    DeploymentParams memory _params = _deploymentParams();
+    ZkProtocolUpgradeDeploymentConfig.DeploymentParams memory _params = script.deploymentParams();
     return FakeSupermajorityGovernor.Settings({
       name: _params.supermajorityGovernorName,
       token: _params.zkToken,
@@ -71,126 +74,99 @@ contract DeployZkProtocolUpgradeGovernanceTest is Test, DeployZkProtocolUpgradeG
       lateQuorumVoteExtension: _params.supermajorityGovernorLateQuorumVoteExtension
     });
   }
-
-  // Supplies the Supermajority Governor and override timelock directly. Environment variables are shared by tests
-  // running in parallel, so only the `check` test, which reads an existing deployment the way the script does, sets
-  // them.
-  function _supermajorityGovernorContracts() internal view override returns (address, TimelockController) {
-    return (address(supermajorityGovernor), overrideTimelock);
-  }
-
-  // Supplies the Supermajority Governor's deployer directly, for the same reason.
-  function _supermajorityGovernorDeployer(address _default) internal view virtual override returns (address) {
-    return supermajorityGovernorDeployer != address(0) ? supermajorityGovernorDeployer : _default;
-  }
-
-  function _deploymentParams()
-    internal
-    view
-    override(ZkProtocolUpgradeDeploymentConfig, ZkProtocolUpgradeEraMainnetConfig)
-    returns (DeploymentParams memory _params)
-  {
-    _params = ZkProtocolUpgradeEraMainnetConfig._deploymentParams();
-    if (useCodelessProtocolTimelock) {
-      _params.protocolTimelock = vm.addr(uint256(keccak256("Account Without Code")));
-    }
-    if (shortenVetoOverrideWindow) {
-      _params.vetoGovernorVetoOverrideDuration = 12 days;
-    }
-    if (omitVetoGuardian) {
-      _params.vetoGovernorVetoGuardian = address(0);
-    }
-  }
 }
 
 contract Run is DeployZkProtocolUpgradeGovernanceTest {
   function setUp() public override {
     super.setUp();
-    run();
+    script.run();
   }
 
   function test_MintsOneSeatToEachCouncilMemberAndHandsTheTokenToTheGovernanceAdmin() public view {
-    DeploymentParams memory _params = _deploymentParams();
+    ZkProtocolUpgradeDeploymentConfig.DeploymentParams memory _params = script.deploymentParams();
+    CouncilERC20 _councilToken = script.councilToken();
 
-    assertEq(councilToken.name(), "ZKsync Protocol Upgrade Council Seat");
-    assertEq(councilToken.symbol(), "ZKPUC");
-    assertEq(councilToken.owner(), GOVERNANCE_ADMIN);
-    assertEq(councilToken.totalSupply(), 8e18);
+    assertEq(_councilToken.name(), "ZKsync Protocol Upgrade Council Seat");
+    assertEq(_councilToken.symbol(), "ZKPUC");
+    assertEq(_councilToken.owner(), _params.governanceAdmin);
+    assertEq(_councilToken.totalSupply(), 8e18);
     for (uint256 _i = 0; _i < _params.councilMembers.length; _i += 1) {
-      assertEq(councilToken.getVotes(_params.councilMembers[_i]), 1e18);
+      assertEq(_councilToken.getVotes(_params.councilMembers[_i]), 1e18);
     }
   }
 
   function test_DeploysTheCouncilGovernorWiredToTheVetoGovernor() public view {
-    assertEq(councilGovernor.name(), "ZKsync Protocol Upgrade Council");
-    assertEq(address(councilGovernor.token()), address(councilToken));
-    assertEq(councilGovernor.QUORUM(), 1e18);
-    assertEq(address(councilGovernor.councilVetoGovernor()), address(vetoGovernor));
-    assertEq(councilGovernor.owner(), GOVERNANCE_ADMIN);
-    assertEq(councilGovernor.votingDelay(), 1 days);
-    assertEq(councilGovernor.votingPeriod(), 3 days);
-    assertEq(councilGovernor.proposalThreshold(), 1e18);
+    ZkProtocolUpgradeCouncilGovernor _councilGovernor = script.councilGovernor();
+
+    assertEq(_councilGovernor.name(), "ZKsync Protocol Upgrade Council");
+    assertEq(address(_councilGovernor.token()), address(script.councilToken()));
+    assertEq(_councilGovernor.QUORUM(), 1e18);
+    assertEq(address(_councilGovernor.councilVetoGovernor()), address(script.vetoGovernor()));
+    assertEq(_councilGovernor.owner(), script.deploymentParams().governanceAdmin);
+    assertEq(_councilGovernor.votingDelay(), 1 days);
+    assertEq(_councilGovernor.votingPeriod(), 3 days);
+    assertEq(_councilGovernor.proposalThreshold(), 1e18);
   }
 
   function test_DeploysTheVetoGovernorWithTheZipParameters() public view {
-    assertEq(vetoGovernor.name(), "ZKsync Protocol Upgrade Veto Governor");
-    assertEq(address(vetoGovernor.token()), ZK_TOKEN);
-    assertEq(vetoGovernor.COUNCIL(), address(councilGovernor));
-    assertEq(vetoGovernor.timelock(), PROTOCOL_TIMELOCK);
-    assertEq(vetoGovernor.owner(), GOVERNANCE_ADMIN);
-    assertEq(vetoGovernor.votingDelay(), 1 days);
-    assertEq(vetoGovernor.votingPeriod(), 7 days);
-    assertEq(vetoGovernor.vetoThreshold(block.timestamp), 630_000_000e18);
-    assertEq(vetoGovernor.votingPeriodExtension(), 2 days);
-    assertEq(vetoGovernor.minorVetoExtensionThresholdPct(), 50);
-    assertEq(vetoGovernor.vetoGuardian(), 0xF197677d63BF6E2841F5108b8dFd2FD6eCEff74B);
-    assertEq(vetoGovernor.vetoOverrideRole(), address(overrideTimelock));
-    assertEq(vetoGovernor.vetoOverrideDuration(), 14 days);
+    ZkProtocolUpgradeDeploymentConfig.DeploymentParams memory _params = script.deploymentParams();
+    ZkProtocolUpgradeVetoGovernor _vetoGovernor = script.vetoGovernor();
+
+    assertEq(_vetoGovernor.name(), "ZKsync Protocol Upgrade Veto Governor");
+    assertEq(address(_vetoGovernor.token()), _params.zkToken);
+    assertEq(_vetoGovernor.COUNCIL(), address(script.councilGovernor()));
+    assertEq(_vetoGovernor.timelock(), _params.protocolTimelock);
+    assertEq(_vetoGovernor.owner(), _params.governanceAdmin);
+    assertEq(_vetoGovernor.votingDelay(), 1 days);
+    assertEq(_vetoGovernor.votingPeriod(), 7 days);
+    assertEq(_vetoGovernor.vetoThreshold(block.timestamp), 630_000_000e18);
+    assertEq(_vetoGovernor.votingPeriodExtension(), 2 days);
+    assertEq(_vetoGovernor.minorVetoExtensionThresholdPct(), 50);
+    assertEq(_vetoGovernor.vetoGuardian(), 0xF197677d63BF6E2841F5108b8dFd2FD6eCEff74B);
+    assertEq(_vetoGovernor.vetoOverrideRole(), address(overrideTimelock));
+    assertEq(_vetoGovernor.vetoOverrideDuration(), 14 days);
   }
 
   function test_LeavesTheDeployerNoSeatOrAdminRole() public view {
-    assertEq(councilToken.balanceOf(DEFAULT_SENDER), 0);
-    assertTrue(councilToken.owner() != DEFAULT_SENDER);
-    assertTrue(councilGovernor.owner() != DEFAULT_SENDER);
-    assertTrue(vetoGovernor.owner() != DEFAULT_SENDER);
+    assertEq(script.councilToken().balanceOf(DEFAULT_SENDER), 0);
+    assertTrue(script.councilToken().owner() != DEFAULT_SENDER);
+    assertTrue(script.councilGovernor().owner() != DEFAULT_SENDER);
+    assertTrue(script.vetoGovernor().owner() != DEFAULT_SENDER);
   }
 
   function test_DeploysWhenTheSupermajorityGovernorHasADifferentDeployer() public {
-    supermajorityGovernorDeployer = makeAddr("Supermajority Governor Deployer");
+    script.setSupermajorityGovernorDeployer(makeAddr("Supermajority Governor Deployer"));
 
-    run();
+    script.run();
 
-    assertEq(vetoGovernor.vetoOverrideRole(), address(overrideTimelock));
+    assertEq(script.vetoGovernor().vetoOverrideRole(), address(overrideTimelock));
   }
 }
 
 contract Check is DeployZkProtocolUpgradeGovernanceTest {
-  // Reads the Supermajority Governor's deployer from `SUPERMAJORITY_GOVERNOR_DEPLOYER`, as the script does.
-  function _supermajorityGovernorDeployer(address _default) internal view override returns (address) {
-    return DeployZkProtocolUpgradeGovernance._supermajorityGovernorDeployer(_default);
-  }
-
   function test_PassesForTheDeploymentRunMade() public {
+    // Reads the Supermajority Governor's deployer from `SUPERMAJORITY_GOVERNOR_DEPLOYER`, as the script does.
+    script.setReadSupermajorityGovernorDeployerFromEnv(true);
     vm.setEnv("SUPERMAJORITY_GOVERNOR_DEPLOYER", vm.toString(makeAddr("Supermajority Governor Deployer")));
-    run();
+    script.run();
     vm.setEnv("SUPERMAJORITY_GOVERNOR", vm.toString(address(supermajorityGovernor)));
     vm.setEnv("OVERRIDE_TIMELOCK", vm.toString(address(overrideTimelock)));
-    vm.setEnv("COUNCIL_TOKEN", vm.toString(address(councilToken)));
-    vm.setEnv("COUNCIL_GOVERNOR", vm.toString(address(councilGovernor)));
-    vm.setEnv("VETO_GOVERNOR", vm.toString(address(vetoGovernor)));
+    vm.setEnv("COUNCIL_TOKEN", vm.toString(address(script.councilToken())));
+    vm.setEnv("COUNCIL_GOVERNOR", vm.toString(address(script.councilGovernor())));
+    vm.setEnv("VETO_GOVERNOR", vm.toString(address(script.vetoGovernor())));
     vm.setEnv("DEPLOYER", vm.toString(DEFAULT_SENDER));
 
-    check();
+    script.check();
   }
 }
 
-// `vm.expectRevert` applies to the next external call, so these tests call `run` through `this`.
 contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
   function test_RevertIf_TheOverrideTimelockDoesNotBelongToTheSupermajorityGovernor() public {
     supermajorityGovernor = new FakeSupermajorityGovernor(_supermajorityGovernorSettings(makeAddr("Other Timelock")));
+    script.setSupermajorityGovernorContracts(address(supermajorityGovernor), overrideTimelock);
 
     vm.expectRevert("SupermajorityGovernorChecks: the Supermajority Governor's timelock is not the override timelock");
-    this.run();
+    script.run();
   }
 
   function test_RevertIf_TheSupermajorityGovernorHasADifferentQuorum() public {
@@ -199,34 +175,35 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     supermajorityGovernor = new FakeSupermajorityGovernor(_settings);
     overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), address(supermajorityGovernor));
     overrideTimelock.grantRole(overrideTimelock.CANCELLER_ROLE(), address(supermajorityGovernor));
+    script.setSupermajorityGovernorContracts(address(supermajorityGovernor), overrideTimelock);
 
     vm.expectRevert("SupermajorityGovernorChecks: Supermajority Governor quorum does not match the params");
-    this.run();
+    script.run();
   }
 
   function test_RevertIf_TheVetoOverrideWindowIsShorterThanASupermajorityOverride() public {
-    shortenVetoOverrideWindow = true;
+    script.setShortenVetoOverrideWindow(true);
 
     vm.expectRevert(
       "SupermajorityGovernorChecks: vetoGovernorVetoOverrideDuration is too short for a supermajority override"
     );
-    this.run();
+    script.run();
   }
 
   function test_RevertIf_TheVetoGuardianIsTheZeroAddress() public {
-    omitVetoGuardian = true;
+    script.setOmitVetoGuardian(true);
 
     vm.expectRevert(
       "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoGuardian is the zero address; set the veto guardian"
     );
-    this.run();
+    script.run();
   }
 
   function test_RevertIf_TheProtocolTimelockHasNoCode() public {
-    useCodelessProtocolTimelock = true;
+    script.setUseCodelessProtocolTimelock(true);
 
     vm.expectRevert("DeployZkProtocolUpgradeGovernance: protocolTimelock has no code; set it to the Protocol Timelock");
-    this.run();
+    script.run();
   }
 
   // The real override timelock is OpenZeppelin v4, so the v4 admin role is checked on its own.
@@ -234,7 +211,7 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     overrideTimelock.grantRole(TIMELOCK_ADMIN_ROLE, DEFAULT_SENDER);
 
     vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
-    this.run();
+    script.run();
   }
 
   // A wrong OpenZeppelin v5 timelock still administered by the deployer is caught too.
@@ -242,14 +219,15 @@ contract RunReverts is DeployZkProtocolUpgradeGovernanceTest {
     overrideTimelock.grantRole(bytes32(0), DEFAULT_SENDER);
 
     vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
-    this.run();
+    script.run();
   }
 
   function test_RevertIf_TheSupermajorityGovernorDeployerHoldsARoleOnTheOverrideTimelock() public {
-    supermajorityGovernorDeployer = makeAddr("Supermajority Governor Deployer");
-    overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), supermajorityGovernorDeployer);
+    address _supermajorityGovernorDeployer = makeAddr("Supermajority Governor Deployer");
+    script.setSupermajorityGovernorDeployer(_supermajorityGovernorDeployer);
+    overrideTimelock.grantRole(overrideTimelock.PROPOSER_ROLE(), _supermajorityGovernorDeployer);
 
     vm.expectRevert("SupermajorityGovernorChecks: the deployer holds a role on the override timelock");
-    this.run();
+    script.run();
   }
 }
