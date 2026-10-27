@@ -3,7 +3,7 @@ pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
-import {DeploySupermajorityGovernorEraMainnet} from "script/DeploySupermajorityGovernor.s.sol";
+import {DeploySupermajorityGovernorEraMainnet} from "script/DeploySupermajorityGovernorEraMainnet.s.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "council/script/configs/ZkProtocolUpgradeDeploymentConfig.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {ERC20VotesFake} from "test/fakes/ERC20VotesFake.sol";

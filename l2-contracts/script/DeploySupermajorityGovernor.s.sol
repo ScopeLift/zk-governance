@@ -5,7 +5,6 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ZkProtocolGovernor} from "src/ZkProtocolGovernor.sol";
 import {SupermajorityGovernorChecks} from "council/script/SupermajorityGovernorChecks.sol";
-import {ZkProtocolUpgradeEraMainnetConfig} from "council/script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 
 // Deploys the ZKsync Supermajority Governor and its override timelock. Run this before
 // `DeployZkProtocolUpgradeGovernance` in `l2-contracts/council`, which deploys the council contracts and makes this
@@ -97,20 +96,5 @@ abstract contract DeploySupermajorityGovernor is SupermajorityGovernorChecks {
       string.concat("  lateQuorumVoteExtension:  ", vm.toString(_params.supermajorityGovernorLateQuorumVoteExtension))
     );
     _log(string.concat("  overrideTimelockMinDelay: ", vm.toString(_params.overrideTimelockMinDelay)));
-  }
-}
-
-// The ZIP parameters for the Supermajority Governor on ZKsync Era mainnet.
-//
-// Usage, from `l2-contracts`, with the deployer passed through the usual forge wallet options, e.g. `--account`:
-// `forge script script/DeploySupermajorityGovernor.s.sol:DeploySupermajorityGovernorEraMainnet --zksync
-// --rpc-url <era-rpc> --broadcast`
-// Omit `--broadcast` for a dry run. Pass the logged addresses to `DeployZkProtocolUpgradeGovernance` as
-// `SUPERMAJORITY_GOVERNOR` and `OVERRIDE_TIMELOCK`. After broadcasting, add `--sig "check()"` with those two and `DEPLOYER` set to check the
-// deployment on chain.
-contract DeploySupermajorityGovernorEraMainnet is DeploySupermajorityGovernor, ZkProtocolUpgradeEraMainnetConfig {
-  // Script entrypoint
-  function run() public override {
-    DeploySupermajorityGovernor.run();
   }
 }
