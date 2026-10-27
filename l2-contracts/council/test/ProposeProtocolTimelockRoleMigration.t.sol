@@ -132,6 +132,54 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
     assertEq(uint8(protocolGovernor.state(_proposalId)), uint8(IGovernor.ProposalState.Pending));
   }
 
+  function testFuzz_MigratesTheProtocolTimelockRolesToTheVetoGovernor(address _vetoGovernor) public {
+    _assumeValidVetoGovernor(_vetoGovernor);
+    vetoGovernor = _vetoGovernor;
+
+    run();
+
+    Proposal memory _proposal = _migrationProposal(_vetoGovernor);
+    assertTrue(
+      protocolTimelock.isOperationDone(
+        protocolTimelock.hashOperationBatch(
+          _proposal.targets, _proposal.values, _proposal.calldatas, bytes32(0), keccak256(bytes(_proposal.description))
+        )
+      )
+    );
+    bytes32[3] memory _roles = _migratedRoles();
+    for (uint256 _i = 0; _i < 3; _i += 1) {
+      assertTrue(protocolTimelock.hasRole(_roles[_i], _vetoGovernor));
+      assertFalse(protocolTimelock.hasRole(_roles[_i], address(protocolGovernor)));
+    }
+    assertTrue(protocolTimelock.hasRole(TIMELOCK_ADMIN_ROLE, address(protocolTimelock)));
+    assertEq(protocolTimelock.getMinDelay(), 0);
+
+    // The Veto Governor can now schedule and execute through the timelock, and `ZkProtocolGovernor` can no longer
+    // schedule.
+    address[] memory _targets = new address[](1);
+    _targets[0] = address(protocolTimelock);
+    uint256[] memory _values = new uint256[](1);
+    bytes[] memory _calldatas = new bytes[](1);
+    _calldatas[0] = abi.encodeCall(IAccessControl.grantRole, (PROPOSER_ROLE, _vetoGovernor));
+    vm.prank(_vetoGovernor);
+    protocolTimelock.scheduleBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0), 0);
+    vm.prank(_vetoGovernor);
+    protocolTimelock.executeBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0));
+    assertTrue(
+      protocolTimelock.isOperationDone(
+        protocolTimelock.hashOperationBatch(_targets, _values, _calldatas, bytes32(0), bytes32(0))
+      )
+    );
+
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IAccessControl.AccessControlUnauthorizedAccount.selector, address(protocolGovernor), PROPOSER_ROLE
+      )
+    );
+    vm.prank(address(protocolGovernor));
+    protocolTimelock.scheduleBatch(_targets, _values, _calldatas, bytes32(0), keccak256("salt"), 0);
+  }
+
   function testFuzz_RevertIf_TheMigrationProposalAlreadyExists(uint8 _state) public {
     IGovernor.ProposalState _existingState = _boundToProposalState(_state);
     _addProtocolGovernorProposal(_hashProposal(_migrationProposal(vetoGovernor)), _existingState);
