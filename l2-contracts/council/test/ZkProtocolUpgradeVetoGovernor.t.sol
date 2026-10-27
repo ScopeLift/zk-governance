@@ -227,7 +227,7 @@ contract SetVetoThreshold is ZkProtocolUpgradeVetoGovernorTest {
 }
 
 contract State is ZkProtocolUpgradeVetoGovernorTest {
-  function testFuzz_ReturnsDefeatedWhenAgainstVotesReachTheVetoThreshold(uint256 _vetoThreshold, uint256 _againstVotes)
+  function testFuzz_DefeatedWhenAgainstVotesReachTheVetoThreshold(uint256 _vetoThreshold, uint256 _againstVotes)
     public
   {
     _vetoThreshold = _boundToValidVetoThreshold(_vetoThreshold);
@@ -242,10 +242,9 @@ contract State is ZkProtocolUpgradeVetoGovernorTest {
     _assertState(_governor, _proposalId, IGovernor.ProposalState.Defeated);
   }
 
-  function testFuzz_ReturnsSucceededWhenAgainstVotesAreBelowTheVetoThreshold(
-    uint256 _vetoThreshold,
-    uint256 _againstVotes
-  ) public {
+  function testFuzz_SucceededWhenAgainstVotesAreBelowTheVetoThreshold(uint256 _vetoThreshold, uint256 _againstVotes)
+    public
+  {
     _vetoThreshold = _bound(_vetoThreshold, 2, MAX_VETO_THRESHOLD);
     _againstVotes = _bound(_againstVotes, 1, _vetoThreshold - 1);
     ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(_vetoThreshold);
