@@ -144,6 +144,34 @@ contract Run is ProposeProtocolTimelockRoleMigrationTest {
     assertEq(_inFlight.length, 1);
     assertEq(_inFlight[0], bytes32(uint256(1)));
   }
+
+  function test_ProposesTheMigrationOnZkProtocolGovernor() public {
+    manifestFileName = "test-run-proposes-the-migration.json";
+
+    run();
+
+    _readAndRemoveManifest();
+    uint256 _proposalId = _hashProposal(_migrationProposal(vetoGovernor));
+    assertEq(uint8(protocolGovernor.state(_proposalId)), uint8(IGovernor.ProposalState.Pending));
+  }
+
+  function test_RevertIf_TheMigrationProposalAlreadyExists() public {
+    _addProtocolGovernorProposal(_hashProposal(_migrationProposal(vetoGovernor)), IGovernor.ProposalState.Active);
+
+    vm.expectRevert(
+      "ProposeProtocolTimelockRoleMigration: the migration proposal already exists on ZkProtocolGovernor (Active)"
+    );
+    this.run();
+  }
+
+  function test_RevertIf_TheProposerIsBelowTheProposalThreshold() public {
+    protocolGovernor.setProposalThreshold(1);
+
+    vm.expectRevert(
+      "ProposeProtocolTimelockRoleMigration: the proposer's votes are below ZkProtocolGovernor's threshold"
+    );
+    this.run();
+  }
 }
 
 contract CheckReadyToExecute is ProposeProtocolTimelockRoleMigrationTest {

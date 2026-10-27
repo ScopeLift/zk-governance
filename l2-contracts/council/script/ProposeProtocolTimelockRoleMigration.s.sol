@@ -5,15 +5,16 @@ import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {ProtocolTimelockRoleMigration} from "script/ProtocolTimelockRoleMigration.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "script/ZkProtocolUpgradeEraMainnetConfig.sol";
 
-// Generates the `ZkProtocolGovernor` proposal that moves the proposer, executor and canceller roles on the Protocol
-// Timelock to `ZkProtocolUpgradeVetoGovernor`, and an execution manifest describing it. Nothing is broadcast: the
-// proposal is submitted separately with the `propose` calldata this script prints. Submit that calldata unchanged:
-// the proposal ID depends on the exact description, so a proposal whose description a UI reformats gets a different ID
-// and fails `checkReadyToExecute`.
+// Proposes, from the broadcasting delegate, the `ZkProtocolGovernor` proposal that moves the proposer, executor and
+// canceller roles on the Protocol Timelock to `ZkProtocolUpgradeVetoGovernor`, and writes an execution manifest
+// describing it. The proposal ID depends on the exact description, so proposing from the script keeps the description
+// on chain, and with it the ID `checkReadyToExecute` looks for, exactly as built here.
 //
-// `run` checks that the deployment is fully configured and that the roles have not moved yet, simulates the proposal's
-// execution against the live chain state, checks the result, and writes the manifest. It lists, but does not fail on,
-// other `ZkProtocolGovernor` proposals still in flight, since those may finish before the migration executes.
+// `run` checks that the deployment is fully configured, that the roles have not moved yet, that the migration has not
+// been proposed already, and that the delegate's votes meet the proposal threshold. It then proposes the migration,
+// simulates its execution against the live chain state, checks the result, and writes the manifest. It lists, but does
+// not fail on, other `ZkProtocolGovernor` proposals still in flight, since those may finish before the migration
+// executes.
 //
 // `checkReadyToExecute` repeats the checks just before the migration proposal executes, whether or not it is queued
 // yet. It also fails unless the migration proposal has passed on `ZkProtocolGovernor`, and if any other
@@ -25,7 +26,8 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
   // The manifest's file name in `MANIFEST_DIR` unless `MANIFEST_FILE` is set.
   string internal constant DEFAULT_MANIFEST_FILE = "protocol-timelock-role-migration.json";
 
-  // Generates, simulates and checks the migration proposal, and writes its execution manifest.
+  // Proposes the migration from the broadcasting delegate, simulates and checks its execution, and writes its execution
+  // manifest.
   function run() public virtual {
     address _vetoGovernor = _deployedVetoGovernor();
     _checkBeforeMigration(_vetoGovernor);
@@ -34,7 +36,17 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
     uint256 _proposalId = _hashProposal(_proposal);
     uint256[] memory _proposalIds = _protocolGovernorProposalIds();
     uint256[] memory _inFlight = _inFlightProposals(_proposalIds, _proposalId);
-    _logIfAlreadyProposed(_proposalIds, _proposalId);
+    _checkNotAlreadyProposed(_proposalIds, _proposalId);
+    _checkProposerMeetsThreshold(msg.sender);
+
+    // Proposed before the simulation, which pranks `ZkProtocolGovernor` and so must stay out of the broadcast.
+    vm.startBroadcast();
+    uint256 _proposedId = IGovernor(_protocolGovernor())
+      .propose(_proposal.targets, _proposal.values, _proposal.calldatas, _proposal.description);
+    vm.stopBroadcast();
+    if (_proposedId != _proposalId) {
+      revert("ProposeProtocolTimelockRoleMigration: ZkProtocolGovernor returned an unexpected proposal ID");
+    }
 
     _simulateMigration(_proposal);
     _checkAfterMigration(_vetoGovernor);
@@ -43,7 +55,7 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
 
     _log(string.concat("Proposal ID: ", vm.toString(bytes32(_proposalId))));
     _log(string.concat("Governor: ", vm.toString(_protocolGovernor())));
-    _log(string.concat("propose calldata: ", vm.toString(_proposeCalldata(_proposal))));
+    _log(string.concat("Proposed by: ", vm.toString(msg.sender)));
     _log(string.concat("Manifest written to ", _writtenManifestPath));
     _logInFlight(_inFlight);
     _log("Simulated execution: all migration checks passed");
@@ -79,22 +91,30 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
     return vm.envOr("MANIFEST_FILE", DEFAULT_MANIFEST_FILE);
   }
 
-  // Notes when the migration proposal already exists on `ZkProtocolGovernor`, in which case proposing it again reverts.
-  function _logIfAlreadyProposed(uint256[] memory _proposalIds, uint256 _migrationProposalId) internal view {
+  // Checks that the migration proposal does not exist on `ZkProtocolGovernor` yet, since proposing it again reverts.
+  function _checkNotAlreadyProposed(uint256[] memory _proposalIds, uint256 _migrationProposalId) internal view {
     string[8] memory _stateNames =
       ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
     for (uint256 _i = 0; _i < _proposalIds.length; _i += 1) {
       if (_proposalIds[_i] == _migrationProposalId) {
         IGovernor.ProposalState _state = IGovernor(_protocolGovernor()).state(_migrationProposalId);
-        _log(
+        revert(
           string.concat(
-            "NOTE: the migration proposal already exists on ZkProtocolGovernor (",
+            "ProposeProtocolTimelockRoleMigration: the migration proposal already exists on ZkProtocolGovernor (",
             _stateNames[uint8(_state)],
-            "); proposing it again reverts"
+            ")"
           )
         );
-        return;
       }
+    }
+  }
+
+  // Checks that `_proposer` has the votes `ZkProtocolGovernor` requires to propose, counted at the previous block as
+  // the governor counts them.
+  function _checkProposerMeetsThreshold(address _proposer) internal view {
+    IGovernor _governor = IGovernor(_protocolGovernor());
+    if (_governor.getVotes(_proposer, block.number - 1) < _governor.proposalThreshold()) {
+      revert("ProposeProtocolTimelockRoleMigration: the proposer's votes are below ZkProtocolGovernor's threshold");
     }
   }
 
@@ -215,9 +235,10 @@ abstract contract ProposeProtocolTimelockRoleMigration is ProtocolTimelockRoleMi
 // Usage, from `l2-contracts/council`, with the deployed council governance's addresses and deployer in
 // `COUNCIL_TOKEN`, `COUNCIL_GOVERNOR`, `VETO_GOVERNOR`, `SUPERMAJORITY_GOVERNOR`, `OVERRIDE_TIMELOCK` and `DEPLOYER`:
 // `forge script script/ProposeProtocolTimelockRoleMigration.s.sol:ProposeProtocolTimelockRoleMigrationEraMainnet
-// --zksync --rpc-url <era-rpc>`. Add `--sig "checkReadyToExecute()"` right before execution. `MANIFEST_FILE` optionally
-// names the manifest file written in `proposals/`. The RPC endpoint must serve historical logs, which
-// local forks usually do not.
+// --zksync --rpc-url <era-rpc> --broadcast --account <delegate-keystore-account> --sender <delegate-address>`, where the
+// delegate's votes meet `ZkProtocolGovernor`'s proposal threshold. Run it with `--sig "checkReadyToExecute()"` and
+// without `--broadcast` right before execution. `MANIFEST_FILE` optionally names the manifest file written in
+// `proposals/`. The RPC endpoint must serve historical logs, which local forks usually do not.
 contract ProposeProtocolTimelockRoleMigrationEraMainnet is
   ProposeProtocolTimelockRoleMigration,
   ZkProtocolUpgradeEraMainnetConfig
