@@ -149,6 +149,10 @@ contract ProposeProtocolTimelockRoleMigrationTest is Test {
   }
 }
 
+// Every run forks Era mainnet and fetches state over RPC, so these tests fuzz fewer runs than the default.
+/// forge-config: default.fuzz.runs = 16
+/// forge-config: ci.fuzz.runs = 16
+/// forge-config: lite.fuzz.runs = 4
 contract Run is ProposeProtocolTimelockRoleMigrationTest {
   function testFuzz_ProposesTheMigrationFromTheBroadcaster(address _vetoGovernor) public {
     _assumeValidVetoGovernor(_vetoGovernor);
