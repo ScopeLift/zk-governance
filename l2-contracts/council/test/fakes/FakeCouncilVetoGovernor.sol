@@ -6,7 +6,9 @@ import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 // Stands in for the veto governor a council governor submits successful proposals to. Like a real governor, it
 // identifies a proposal by the hash of its actions and description, rejects a proposal submitted twice, executes only
 // a succeeded proposal, and reverts for any proposal it was never given. A submitted proposal is pending until a test
-// ends its veto period with `succeed` or vetoes it with `defeat`. Each has a fixed deadline and no ETA.
+// ends its veto period with `succeed`, vetoes it with `defeat`, or ends it some other way with `cancel` or `expire`.
+// Each starts with the same deadline and no ETA, and a test can extend the deadline with `extendDeadline` or set an ETA
+// with `queueInTimelock`.
 contract FakeCouncilVetoGovernor {
   error FakeCouncilVetoGovernor__DuplicateProposal(uint256 proposalId);
   error FakeCouncilVetoGovernor__ProposalNotSucceeded(uint256 proposalId);
@@ -16,6 +18,8 @@ contract FakeCouncilVetoGovernor {
 
   mapping(uint256 proposalId => bool) public isSubmitted;
   mapping(uint256 proposalId => IGovernor.ProposalState) internal proposalStates;
+  mapping(uint256 proposalId => uint256) internal proposalDeadlines;
+  mapping(uint256 proposalId => uint256) internal proposalEtas;
 
   function state(uint256 _proposalId) external view returns (IGovernor.ProposalState) {
     _revertIfProposalIsUnknown(_proposalId);
@@ -24,12 +28,12 @@ contract FakeCouncilVetoGovernor {
 
   function proposalDeadline(uint256 _proposalId) external view returns (uint256) {
     _revertIfProposalIsUnknown(_proposalId);
-    return PROPOSAL_DEADLINE;
+    return proposalDeadlines[_proposalId];
   }
 
   function proposalEta(uint256 _proposalId) external view returns (uint256) {
     _revertIfProposalIsUnknown(_proposalId);
-    return 0;
+    return proposalEtas[_proposalId];
   }
 
   function propose(
@@ -44,6 +48,7 @@ contract FakeCouncilVetoGovernor {
     }
     isSubmitted[_proposalId] = true;
     proposalStates[_proposalId] = IGovernor.ProposalState.Pending;
+    proposalDeadlines[_proposalId] = PROPOSAL_DEADLINE;
   }
 
   function execute(
@@ -70,6 +75,31 @@ contract FakeCouncilVetoGovernor {
   function defeat(uint256 _proposalId) external {
     _revertIfProposalIsUnknown(_proposalId);
     proposalStates[_proposalId] = IGovernor.ProposalState.Defeated;
+  }
+
+  // Simulates a submitted proposal being canceled, such as by its timelock operation being canceled.
+  function cancel(uint256 _proposalId) external {
+    _revertIfProposalIsUnknown(_proposalId);
+    proposalStates[_proposalId] = IGovernor.ProposalState.Canceled;
+  }
+
+  // Simulates a submitted proposal expiring before it is executed.
+  function expire(uint256 _proposalId) external {
+    _revertIfProposalIsUnknown(_proposalId);
+    proposalStates[_proposalId] = IGovernor.ProposalState.Expired;
+  }
+
+  // Simulates AGAINST votes extending a submitted proposal's voting period.
+  function extendDeadline(uint256 _proposalId, uint256 _newDeadline) external {
+    _revertIfProposalIsUnknown(_proposalId);
+    proposalDeadlines[_proposalId] = _newDeadline;
+  }
+
+  // Simulates a succeeded proposal being queued in the timelock, which gives it an ETA.
+  function queueInTimelock(uint256 _proposalId, uint256 _eta) external {
+    _revertIfProposalIsUnknown(_proposalId);
+    proposalStates[_proposalId] = IGovernor.ProposalState.Queued;
+    proposalEtas[_proposalId] = _eta;
   }
 
   function _hashProposal(

@@ -68,6 +68,41 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
     return QUORUM;
   }
 
+  /// @notice Returns a proposal's state. Once a proposal is queued, its state follows the veto governor's: it stays
+  /// queued while the veto governor is still considering it, and becomes executed when the veto governor executes it.
+  /// If token holders or the veto guardian veto it, it is defeated, since the veto governor's override role can still
+  /// revive it within the override window, after which it stays defeated. It is canceled only if the veto governor
+  /// cancels it or it expires there.
+  /// @param _proposalId The identifier of the proposal to check.
+  /// @return The proposal's current state.
+  function state(uint256 _proposalId) public view virtual override returns (ProposalState) {
+    ProposalState _state = super.state(_proposalId);
+    // Only a queued proposal has a stored ETA, and the council cannot cancel a proposal once it is queued, so a
+    // canceled proposal with an ETA is one whose state the veto governor decided.
+    if (
+      _state == ProposalState.Canceled && Governor.proposalEta(_proposalId) != 0
+        && councilVetoGovernor.state(_proposalId) == ProposalState.Defeated
+    ) {
+      return ProposalState.Defeated;
+    }
+    return _state;
+  }
+
+  /// @notice Returns the time at which a queued proposal can next move forward, or zero if it has not been queued.
+  /// Until the veto governor queues the proposal in its timelock, this is the end of the veto governor's voting period,
+  /// including any extension it has granted since. Once the veto governor queues it, this is the time its timelock
+  /// allows it to be executed.
+  /// @param _proposalId The identifier of the proposal to check.
+  /// @return The proposal's ETA, or zero if it has not been queued.
+  function proposalEta(uint256 _proposalId) public view virtual override returns (uint256) {
+    uint256 _eta = super.proposalEta(_proposalId);
+    // The ETA recorded at queue time is the veto governor's deadline then, which an extension can since have moved.
+    if (_eta != 0 && councilVetoGovernor.proposalEta(_proposalId) == 0) {
+      return councilVetoGovernor.proposalDeadline(_proposalId);
+    }
+    return _eta;
+  }
+
   /// @notice Returns whether a proposal's FOR votes meet quorum. ABSTAIN votes do not count toward it.
   /// @param _proposalId The identifier of the proposal to check.
   /// @return Whether the proposal has at least one seat's worth of FOR votes.

@@ -261,6 +261,88 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
 
     _assertState(_proposalId, IGovernor.ProposalState.Succeeded);
   }
+
+  function test_DefeatedOnceTheVetoGovernorDefeatsAQueuedProposal() public {
+    _seatMembers(1);
+    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
+
+    vetoGovernor.defeat(_proposalId);
+
+    _assertState(_proposalId, IGovernor.ProposalState.Defeated);
+  }
+
+  function test_QueuedAgainOnceTheVetoGovernorOverridesTheVetoOfAQueuedProposal() public {
+    _seatMembers(1);
+    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
+    vetoGovernor.defeat(_proposalId);
+
+    // An overridden veto turns the veto governor's state from defeated back to succeeded.
+    vetoGovernor.succeed(_proposalId);
+
+    _assertState(_proposalId, IGovernor.ProposalState.Queued);
+  }
+
+  function test_CanceledOnceTheVetoGovernorCancelsAQueuedProposal() public {
+    _seatMembers(1);
+    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
+
+    vetoGovernor.cancel(_proposalId);
+
+    _assertState(_proposalId, IGovernor.ProposalState.Canceled);
+  }
+
+  function test_CanceledOnceAQueuedProposalExpiresInTheVetoGovernor() public {
+    _seatMembers(1);
+    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
+
+    vetoGovernor.expire(_proposalId);
+
+    _assertState(_proposalId, IGovernor.ProposalState.Canceled);
+  }
+
+  function test_CanceledWhenTheProposerCancelsBeforeVotingOpens() public {
+    _seatMembers(1);
+    (address[] memory _targets, uint256[] memory _values, bytes[] memory _calldatas) = _proposalActions();
+    vm.startPrank(members[0]);
+    uint256 _proposalId = governor.propose(_targets, _values, _calldatas, PROPOSAL_DESCRIPTION);
+
+    governor.cancel(_targets, _values, _calldatas, keccak256(bytes(PROPOSAL_DESCRIPTION)));
+    vm.stopPrank();
+
+    _assertState(_proposalId, IGovernor.ProposalState.Canceled);
+  }
+}
+
+contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
+  function test_ZeroBeforeTheProposalIsQueued() public {
+    _seatMembers(1);
+    uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
+    _castVote(_proposalId, members[0], GovernorCountingSimple.VoteType.For);
+
+    assertEq(governor.proposalEta(_proposalId), 0);
+  }
+
+  function testFuzz_FollowsTheVetoGovernorsDeadlineOnceAnExtensionMovesIt(uint256 _extendedDeadline) public {
+    // An extension only moves the deadline later, and the veto governor's clock fits in a uint48.
+    _extendedDeadline = bound(_extendedDeadline, vetoGovernor.PROPOSAL_DEADLINE() + 1, type(uint48).max);
+    _seatMembers(1);
+    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
+
+    vetoGovernor.extendDeadline(_proposalId, _extendedDeadline);
+
+    assertEq(governor.proposalEta(_proposalId), _extendedDeadline);
+    _assertState(_proposalId, IGovernor.ProposalState.Queued);
+  }
+
+  function testFuzz_TheVetoGovernorsEtaOnceItQueuesTheProposalInItsTimelock(uint256 _vetoEta) public {
+    _vetoEta = bound(_vetoEta, 1, type(uint256).max);
+    _seatMembers(1);
+    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
+
+    vetoGovernor.queueInTimelock(_proposalId, _vetoEta);
+
+    assertEq(governor.proposalEta(_proposalId), _vetoEta);
+  }
 }
 
 contract Queue is ZkProtocolUpgradeCouncilGovernorTest {
@@ -276,15 +358,6 @@ contract Queue is ZkProtocolUpgradeCouncilGovernorTest {
     assertTrue(vetoGovernor.isSubmitted(_proposalId));
     assertEq(governor.proposalEta(_proposalId), vetoGovernor.PROPOSAL_DEADLINE());
     _assertState(_proposalId, IGovernor.ProposalState.Queued);
-  }
-
-  function testFuzz_ReportsCanceledOnceTheVetoGovernorDefeatsTheProposal(uint256 _memberCount) public {
-    _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
-    uint256 _proposalId = _passAndQueue(PROPOSAL_DESCRIPTION);
-
-    vetoGovernor.defeat(_proposalId);
-
-    _assertState(_proposalId, IGovernor.ProposalState.Canceled);
   }
 }
 
