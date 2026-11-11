@@ -92,11 +92,20 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
     return _state;
   }
 
-  /// @notice Returns when a queued proposal can next advance, or zero if it has not been queued. While token holders
-  /// are still voting on the proposal in the veto governor, this is the end of that vote, including any extension. Once
-  /// the veto governor queues the proposal, this is the earliest time the veto governor's timelock lets it be executed.
+  /// @notice Returns when a proposal can next advance. The value depends on how far the proposal has got:
+  /// - Before the council queues it, this is zero.
+  /// - Once the council queues it, and until the veto governor queues it in its timelock, this is the veto governor's
+  ///   deadline for the proposal: the time the token holders' veto vote ends, after the veto governor's voting delay and
+  ///   voting period. If veto votes reach the veto governor's minor threshold, the deadline moves back once by the veto
+  ///   governor's voting period extension. After the deadline, a proposal that was not vetoed can be queued in the veto
+  ///   governor.
+  /// - Once the veto governor queues it in its timelock, this is the veto governor's ETA for the proposal: the queue
+  ///   time plus the timelock's minimum delay. From then on, this governor's `execute` can run the proposal.
+  /// - Once the proposal is executed, vetoed or canceled, the value is not cleared. It keeps the last value from the
+  ///   phases above, which can still be in the future, for example when the veto governor cancels a proposal while
+  ///   token holders are voting on it. Check `state` before relying on this value.
   /// @param _proposalId The identifier of the proposal to check.
-  /// @return The proposal's ETA, or zero if it has not been queued.
+  /// @return The timestamp at which the proposal can next advance, or zero if the council has not queued it.
   function proposalEta(uint256 _proposalId) public view virtual override returns (uint256) {
     uint256 _eta = super.proposalEta(_proposalId);
     // The ETA stored at queue time is the veto governor's deadline as it was then, and an extension may have pushed
