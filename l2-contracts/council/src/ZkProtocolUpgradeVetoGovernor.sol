@@ -74,9 +74,9 @@ contract ZkProtocolUpgradeVetoGovernor is BasicCouncilVetoGovernor {
     emit VetoThresholdSet(_oldVetoThreshold, _newVetoThreshold);
   }
 
-  /// @notice Accepts only a zero proposal threshold. Proposals come only from the council governor, which holds no
-  /// votes in the token, so any other threshold would stop the council from queueing proposals. Runs at construction
-  /// and for every `setProposalThreshold` call.
+  /// @notice Rejects any proposal threshold other than zero, at construction and on every `setProposalThreshold` call.
+  /// Only the council governor can propose here, and it holds no voting power in the token, so a non-zero threshold
+  /// would stop the council from queueing proposals.
   /// @param _newProposalThreshold The new proposal threshold.
   function _setProposalThreshold(uint256 _newProposalThreshold) internal virtual override {
     if (_newProposalThreshold != 0) {

@@ -68,21 +68,24 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
     return QUORUM;
   }
 
-  /// @notice Returns a proposal's state. Before the council queues a proposal, this is the usual governor state. Once
-  /// the council queues it, the state follows the proposal in the veto governor:
-  /// - Queued while token holders vote on it, and while it waits in the veto governor's timelock.
-  /// - Executed once the veto governor executes it.
-  /// - Defeated if token holders or the guardian veto it.
-  /// - Canceled if the veto governor cancels it, or if it expires before the veto governor executes it.
-  /// @dev A vetoed proposal is reported as Defeated rather than Canceled because a veto is not final: the veto
-  /// governor's override role can revive the proposal during its override window, and a revived proposal returns to
-  /// Queued. If no one overrides the veto, the proposal stays Defeated.
+  /// @notice Returns a proposal's state. A new proposal is Pending until council voting starts, then Active while
+  /// members vote. It becomes Succeeded as soon as it has one seat's worth of FOR votes, or Defeated if voting ends
+  /// without them, and Canceled if its proposer cancels it before voting starts. Once the council queues a succeeded
+  /// proposal, it is submitted to the veto governor, and from then on its state here follows its state there. It
+  /// is Queued while token holders can veto it and while it waits in the veto governor's timelock, and becomes Executed
+  /// once it runs. If token holders or the guardian veto it, it becomes Defeated, and it returns to Queued if the veto
+  /// governor's override role overrides the veto before the override window closes. If the veto governor cancels it, it
+  /// becomes Canceled.
+  /// @dev The inherited `state` reports a queued proposal as Canceled whenever its proposal in the veto governor did
+  /// not go ahead, including when it was vetoed. Canceled is final, but a vetoed proposal can still be revived by the
+  /// override role, so this override reports a vetoed proposal as Defeated, matching the veto governor, which keeps a
+  /// veto distinguishable from a cancellation.
   /// @param _proposalId The identifier of the proposal to check.
   /// @return The proposal's current state.
   function state(uint256 _proposalId) public view virtual override returns (ProposalState) {
     ProposalState _state = super.state(_proposalId);
-    // Only a queued proposal has a stored ETA, and the council cannot cancel a proposal once it is queued, so a
-    // canceled proposal with an ETA got that state from the veto governor.
+    // A stored ETA means the council queued the proposal, and the council cannot cancel a queued proposal, so this
+    // Canceled state came from the veto governor.
     if (
       _state == ProposalState.Canceled && Governor.proposalEta(_proposalId) != 0
         && councilVetoGovernor.state(_proposalId) == ProposalState.Defeated
@@ -92,24 +95,18 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
     return _state;
   }
 
-  /// @notice Returns when a proposal can next advance. The value depends on how far the proposal has got:
-  /// - Before the council queues it, this is zero.
-  /// - Once the council queues it, and until the veto governor queues it in its timelock, this is the veto governor's
-  ///   deadline for the proposal: the time the token holders' veto vote ends, after the veto governor's voting delay and
-  ///   voting period. If veto votes reach the veto governor's minor threshold, the deadline moves back once by the veto
-  ///   governor's voting period extension. After the deadline, a proposal that was not vetoed can be queued in the veto
-  ///   governor.
-  /// - Once the veto governor queues it in its timelock, this is the veto governor's ETA for the proposal: the queue
-  ///   time plus the timelock's minimum delay. From then on, this governor's `execute` can run the proposal.
-  /// - Once the proposal is executed, vetoed or canceled, the value is not cleared. It keeps the last value from the
-  ///   phases above, which can still be in the future, for example when the veto governor cancels a proposal while
-  ///   token holders are voting on it. Check `state` before relying on this value.
+  /// @notice Returns the time after which a proposal can take its next step. This is zero until the council queues the
+  /// proposal. While token holders can veto it, this is the veto governor's `proposalDeadline`, when the veto vote
+  /// ends, which moves later once if veto votes reach the veto governor's minor threshold. After the deadline, a
+  /// proposal that was not vetoed can be queued in the veto governor's timelock, and from then on this is the veto
+  /// governor's `proposalEta`, after which this governor's `execute` can run it.
+  /// @dev The value is not cleared once the proposal is executed, vetoed or canceled, and can still be in the future,
+  /// for example when the veto governor cancels a proposal during the veto vote. Check `state` before relying on it.
   /// @param _proposalId The identifier of the proposal to check.
-  /// @return The timestamp at which the proposal can next advance, or zero if the council has not queued it.
+  /// @return The timestamp after which the proposal can take its next step, or zero if the council has not queued it.
   function proposalEta(uint256 _proposalId) public view virtual override returns (uint256) {
     uint256 _eta = super.proposalEta(_proposalId);
-    // The ETA stored at queue time is the veto governor's deadline as it was then, and an extension may have pushed
-    // that deadline back since.
+    // The stored ETA is the veto deadline at queue time. An extension can push the deadline later, so read it live.
     if (_eta != 0 && councilVetoGovernor.proposalEta(_proposalId) == 0) {
       return councilVetoGovernor.proposalDeadline(_proposalId);
     }
