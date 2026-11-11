@@ -68,12 +68,12 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
     return QUORUM;
   }
 
-  /// @notice Returns a proposal's state. Until a proposal is queued, this is the usual governor state. After that it
-  /// follows the veto governor: the proposal stays Queued while token holders are voting on it or it waits in the veto
-  /// governor's timelock, and becomes Executed when the veto governor executes it. If token holders or the guardian
-  /// veto it, it is Defeated rather than Canceled, because the override role can still revive it during the override
-  /// window, and a revived proposal returns to Queued. It is Canceled if the veto governor cancels it or it expires in
-  /// the veto governor.
+  /// @notice Returns a proposal's state. Until a proposal is queued, this is the usual governor state. After that, the
+  /// state follows the veto governor: a queued proposal stays Queued while token holders vote on it and while it waits
+  /// in the veto governor's timelock, and becomes Executed when the veto governor executes it. A proposal that token
+  /// holders or the guardian veto is Defeated rather than Canceled, because the override role can still revive it
+  /// during the override window, and a revived proposal returns to Queued. A proposal that the veto governor cancels,
+  /// or that expires in the veto governor, is Canceled.
   /// @param _proposalId The identifier of the proposal to check.
   /// @return The proposal's current state.
   function state(uint256 _proposalId) public view virtual override returns (ProposalState) {
@@ -90,8 +90,8 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
   }
 
   /// @notice Returns when a queued proposal can next advance, or zero if it has not been queued. While token holders
-  /// are still voting on it in the veto governor, this is the end of that vote, including any extension. Once the veto
-  /// governor queues it, this is the earliest time its timelock lets it be executed.
+  /// are still voting on the proposal in the veto governor, this is the end of that vote, including any extension. Once
+  /// the veto governor queues the proposal, this is the earliest time the veto governor's timelock lets it be executed.
   /// @param _proposalId The identifier of the proposal to check.
   /// @return The proposal's ETA, or zero if it has not been queued.
   function proposalEta(uint256 _proposalId) public view virtual override returns (uint256) {
