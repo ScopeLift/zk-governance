@@ -197,12 +197,15 @@ contract SetProposalThreshold is ZkProtocolUpgradeVetoGovernorTest {
     _governor.setProposalThreshold(_newProposalThreshold);
   }
 
-  function test_LetsTheAdminSetAZeroProposalThreshold() public {
-    ZkProtocolUpgradeVetoGovernor _governor = _deployGovernorWithVetoThreshold(MAX_VETO_THRESHOLD);
+  function testFuzz_LetsTheAdminSetAZeroProposalThreshold(address _governorAdmin) public {
+    _assumeNotASystemAddress(_governorAdmin);
+    BasicCouncilVetoGovernor.ConstructorParams memory _params = _constructorParams(0);
+    _params.governorAdmin = _governorAdmin;
+    ZkProtocolUpgradeVetoGovernor _governor = new ZkProtocolUpgradeVetoGovernor(_params, MAX_VETO_THRESHOLD);
 
     vm.expectEmit(address(_governor));
     emit GovernorSettings.ProposalThresholdSet(0, 0);
-    vm.prank(governorAdmin);
+    vm.prank(_governorAdmin);
     _governor.setProposalThreshold(0);
 
     assertEq(_governor.proposalThreshold(), 0);
