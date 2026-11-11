@@ -262,15 +262,11 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _assertState(_proposalId, IGovernor.ProposalState.Succeeded);
   }
 
-  function testFuzz_QueuedWhileTheVetoGovernorHoldsTheProposalInItsTimelock(
-    string memory _description,
-    uint256 _vetoEta
-  ) public {
-    _vetoEta = bound(_vetoEta, 1, type(uint256).max);
+  function testFuzz_QueuedWhileTheVetoGovernorHoldsTheProposalInItsTimelock(string memory _description) public {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.queueInTimelock(_proposalId, _vetoEta);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Queued);
 
     _assertState(_proposalId, IGovernor.ProposalState.Queued);
   }
@@ -279,7 +275,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.defeat(_proposalId);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Defeated);
 
     _assertState(_proposalId, IGovernor.ProposalState.Defeated);
   }
@@ -289,10 +285,10 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
   {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
-    vetoGovernor.defeat(_proposalId);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Defeated);
 
     // An overridden veto turns the veto governor's state from defeated back to succeeded.
-    vetoGovernor.succeed(_proposalId);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Succeeded);
 
     _assertState(_proposalId, IGovernor.ProposalState.Queued);
   }
@@ -301,7 +297,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.cancel(_proposalId);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Canceled);
 
     _assertState(_proposalId, IGovernor.ProposalState.Canceled);
   }
@@ -310,7 +306,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.expire(_proposalId);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Expired);
 
     _assertState(_proposalId, IGovernor.ProposalState.Canceled);
   }
@@ -347,7 +343,7 @@ contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.extendDeadline(_proposalId, _extendedDeadline);
+    vetoGovernor.setDeadline(_proposalId, _extendedDeadline);
 
     assertEq(governor.proposalEta(_proposalId), _extendedDeadline);
     _assertState(_proposalId, IGovernor.ProposalState.Queued);
@@ -361,7 +357,7 @@ contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.queueInTimelock(_proposalId, _vetoEta);
+    vetoGovernor.setEta(_proposalId, _vetoEta);
 
     assertEq(governor.proposalEta(_proposalId), _vetoEta);
   }
@@ -379,8 +375,8 @@ contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
 
-    vetoGovernor.extendDeadline(_proposalId, _extendedDeadline);
-    vetoGovernor.queueInTimelock(_proposalId, _vetoEta);
+    vetoGovernor.setDeadline(_proposalId, _extendedDeadline);
+    vetoGovernor.setEta(_proposalId, _vetoEta);
 
     assertEq(governor.proposalEta(_proposalId), _vetoEta);
   }
@@ -428,7 +424,7 @@ contract Execute is ZkProtocolUpgradeCouncilGovernorTest {
   {
     _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
     uint256 _proposalId = _passAndQueue(_description);
-    vetoGovernor.succeed(_proposalId);
+    vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Succeeded);
     (address[] memory _targets, uint256[] memory _values, bytes[] memory _calldatas) = _proposalActions();
 
     governor.execute(_targets, _values, _calldatas, keccak256(bytes(_description)));
