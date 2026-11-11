@@ -280,9 +280,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _assertState(_proposalId, IGovernor.ProposalState.Defeated);
   }
 
-  function testFuzz_QueuedAgainOnceTheVetoGovernorOverridesTheVetoOfAQueuedProposal(string memory _description)
-    public
-  {
+  function testFuzz_QueuedAgainOnceTheVetoGovernorOverridesTheVetoOfAQueuedProposal(string memory _description) public {
     _seatMembers(1);
     uint256 _proposalId = _passAndQueue(_description);
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Defeated);
