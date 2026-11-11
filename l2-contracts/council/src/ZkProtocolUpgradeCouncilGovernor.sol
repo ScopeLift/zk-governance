@@ -68,12 +68,15 @@ contract ZkProtocolUpgradeCouncilGovernor is BasicCouncilGovernor {
     return QUORUM;
   }
 
-  /// @notice Returns a proposal's state. Until a proposal is queued, this is the usual governor state. After that, the
-  /// state follows the veto governor: a queued proposal stays Queued while token holders vote on it and while it waits
-  /// in the veto governor's timelock, and becomes Executed when the veto governor executes it. A proposal that token
-  /// holders or the guardian veto is Defeated rather than Canceled, because the override role can still revive it
-  /// during the override window, and a revived proposal returns to Queued. A proposal that the veto governor cancels,
-  /// or that expires in the veto governor, is Canceled.
+  /// @notice Returns a proposal's state. Before the council queues a proposal, this is the usual governor state. Once
+  /// the council queues it, the state follows the proposal in the veto governor:
+  /// - Queued while token holders vote on it, and while it waits in the veto governor's timelock.
+  /// - Executed once the veto governor executes it.
+  /// - Defeated if token holders or the guardian veto it.
+  /// - Canceled if the veto governor cancels it, or if it expires before the veto governor executes it.
+  /// @dev A vetoed proposal is reported as Defeated rather than Canceled because a veto is not final: the veto
+  /// governor's override role can revive the proposal during its override window, and a revived proposal returns to
+  /// Queued. If no one overrides the veto, the proposal stays Defeated.
   /// @param _proposalId The identifier of the proposal to check.
   /// @return The proposal's current state.
   function state(uint256 _proposalId) public view virtual override returns (ProposalState) {
