@@ -5,6 +5,8 @@ name: ci
 on:
   workflow_dispatch:
   pull_request:
+    # Draft pull requests run no jobs, to save CI minutes; marking one ready for review runs them.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - master
@@ -15,6 +17,7 @@ env:
 # Every step has a timeout so a hung step fails instead of holding a runner until the 6-hour job limit.
 jobs:
   l1-test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     # The mainnet fork suites (RemoveGuardiansForkTest, MainnetRedeployForkTest) need `--fork-url` and are
     # reported as skipped here; run them locally with `forge test --fork-url <L1_MAINNET_RPC>`.
     defaults:
@@ -45,6 +48,7 @@ jobs:
         run: forge test
 
   hashes:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     # Rebuild both projects from source, recompute every contract's
     # bytecode hash, and fail the build if AllContractsHashes.json doesn't
     # match. Mirrors era-contracts' `calculate-hashes:check` so reviewers

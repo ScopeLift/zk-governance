@@ -4,9 +4,11 @@
 # OpenZeppelin v5 and the Cancun EVM version (OpenZeppelin v5.4 uses `mcopy`), while the existing contracts are pinned
 # to solc 0.8.24, OpenZeppelin v4 and Paris. foundry-zksync applies one EVM version to a whole build and always writes
 # artifacts to `<project root>/zkout`, so the two cannot share a project without changing existing bytecode or
-# overwriting each other's artifacts. The project is self-contained: council-governance is its only dependency, and
-# OpenZeppelin v5 and forge-std come from council-governance's own submodules, the versions upstream builds and tests
-# with.
+# overwriting each other's artifacts. The contracts build from this project alone: council-governance is their only
+# dependency, and OpenZeppelin v5 and forge-std come from council-governance's own submodules, the versions upstream
+# builds and tests with. The fork smoke tests (`test/*.integration.t.sol`) also deploy the main project's OpenZeppelin
+# v4 Supermajority Governor and override timelock from its build output, so run `forge build --skip test --skip script`
+# and `forge build --zksync --skip test --skip script` in `l2-contracts` before running them.
 #
 # EraVM bytecode depends on the zksolc version. Build and deploy with foundry-zksync v0.1.10 (zksolc 1.5.15), the
 # release the council workflow installs. zksolc isn't pinned here, because stock forge warns about the `zksync` section
@@ -14,6 +16,11 @@
 [profile.default]
   auto_detect_remappings = false
   evm_version = "cancun"
+  # The smoke tests deploy OpenZeppelin v4 contracts from the main l2-contracts project's EVM and EraVM artifacts.
+  fs_permissions = [
+    { access = "read", path = "../out" },
+    { access = "read", path = "../zkout" },
+  ]
   libs = ["lib"]
   optimizer = true
   optimizer_runs = 10_000_000

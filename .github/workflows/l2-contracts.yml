@@ -5,6 +5,8 @@ name: l2-contracts
 on:
   workflow_dispatch:
   pull_request:
+    # Draft pull requests run no jobs, to save CI minutes; marking one ready for review runs them.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "l2-contracts/**"
       - "!l2-contracts/council/**"
@@ -36,6 +38,7 @@ env:
 # the 6-hour job limit. Each timeout is a few times the step's slowest observed duration.
 jobs:
   build:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     defaults:
       run:
         working-directory: ./l2-contracts
@@ -71,6 +74,7 @@ jobs:
   # split across parallel shards. Test contracts are assigned round-robin by name, so every suite runs in exactly one
   # shard (contracts that share a name across files stay together) and new test files are picked up automatically.
   forge-test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: forge-test (${{ matrix.shard }}/${{ strategy.job-total }})
     defaults:
       run:
@@ -129,6 +133,7 @@ jobs:
 
   # Hardhat compiles against OpenZeppelin from node_modules, so this job needs neither Foundry nor the submodules.
   hardhat-test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     defaults:
       run:
         working-directory: ./l2-contracts
@@ -164,6 +169,7 @@ jobs:
         run: npx hardhat test
 
   lint:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     defaults:
       run:
         working-directory: ./l2-contracts
@@ -187,10 +193,11 @@ jobs:
         timeout-minutes: 5
         run: scopelint check
 
-  # One check covering the build and every test job, so branch protection can require a single `test`. It always runs,
-  # because GitHub reports a skipped required check as passed.
+  # One check covering the build and every test job, so branch protection can require a single `test`. It runs even
+  # when a job it needs fails or is skipped, because GitHub reports a skipped required check as passed. On a draft pull
+  # request it skips along with the jobs it covers.
   test:
-    if: always()
+    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     needs: [build, forge-test, hardhat-test]
     runs-on: ubuntu-latest
     steps:
