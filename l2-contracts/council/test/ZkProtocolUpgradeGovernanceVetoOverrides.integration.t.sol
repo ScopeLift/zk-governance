@@ -29,6 +29,49 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
     );
   }
 
+  /// @notice Puts an override of the veto on `_proposalId` to a Supermajority Governor vote that
+  /// `supermajorityOpponent` contests: `supermajorityVoter` proposes it and votes FOR with the quorum, and
+  /// `supermajorityOpponent` votes AGAINST with the votes it was dealt before this call. Leaves the time just past the
+  /// voting period and returns the Supermajority Governor's proposal ID.
+  function _voteOnVetoOverrideWithTheQuorumForAndTheOpponentAgainst(uint256 _proposalId)
+    internal
+    returns (uint256 _overrideProposalId)
+  {
+    _overrideProposalId = _proposeVetoOverride(_proposalId);
+    _warpToSupermajorityVoting(_overrideProposalId);
+    _castSupermajorityVote(supermajorityVoter, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.For));
+    _castSupermajorityVote(supermajorityOpponent, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.Against));
+    _warpPastSupermajorityDeadline(_overrideProposalId);
+  }
+
+  /// @notice Puts an override of the veto on `_proposalId` to a Supermajority Governor vote in which only
+  /// `supermajoritySupporter` votes: `supermajorityVoter` proposes it, and `supermajoritySupporter` votes FOR with the
+  /// votes it was dealt before this call. Leaves the time just past the voting period and returns the Supermajority
+  /// Governor's proposal ID.
+  function _voteOnVetoOverrideWithOnlyTheSupporterFor(uint256 _proposalId)
+    internal
+    returns (uint256 _overrideProposalId)
+  {
+    _overrideProposalId = _proposeVetoOverride(_proposalId);
+    _warpToSupermajorityVoting(_overrideProposalId);
+    _castSupermajorityVote(supermajoritySupporter, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.For));
+    _warpPastSupermajorityDeadline(_overrideProposalId);
+  }
+
+  /// @notice Asserts that the Supermajority Governor defeated `_overrideProposalId`, the override of the veto on
+  /// `_proposal`, so the override cannot be queued on the override timelock and the veto stands.
+  function _assertOverrideIsDefeatedAndVetoStands(
+    Proposal memory _proposal,
+    uint256 _proposalId,
+    uint256 _overrideProposalId
+  ) internal {
+    assertEq(uint8(supermajorityGovernor.state(_overrideProposalId)), uint8(IGovernor.ProposalState.Defeated));
+    Proposal memory _override = _vetoOverrideProposal(_proposalId);
+    vm.expectRevert("Governor: proposal not successful");
+    supermajorityGovernor.queue(_override.targets, _override.values, _override.calldatas, _descriptionHash(_override));
+    _assertVetoStands(_proposal, _proposalId);
+  }
+
   /// @notice Asserts that the veto on `_proposal` still stands: the override did not happen, the proposal is Defeated
   /// on both governors, and neither queueing it on the Protocol Timelock nor executing it through the council works.
   function _assertVetoStands(Proposal memory _proposal, uint256 _proposalId) internal {
@@ -55,11 +98,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
     uint256 _proposalId = _passAndVetoByTokenHolders(_proposal);
 
     // The Supermajority Governor passes the override with the quorum of FOR votes and more FOR than AGAINST.
-    uint256 _overrideProposalId = _proposeVetoOverride(_proposalId);
-    _warpToSupermajorityVoting(_overrideProposalId);
-    _castSupermajorityVote(supermajorityVoter, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.For));
-    _castSupermajorityVote(supermajorityOpponent, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.Against));
-    _warpPastSupermajorityDeadline(_overrideProposalId);
+    uint256 _overrideProposalId = _voteOnVetoOverrideWithTheQuorumForAndTheOpponentAgainst(_proposalId);
     assertEq(uint8(supermajorityGovernor.state(_overrideProposalId)), uint8(IGovernor.ProposalState.Succeeded));
 
     // The override waits 1 day in the override timelock, then the timelock calls `overrideVeto`.
@@ -72,6 +111,18 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
     supermajorityGovernor.execute(_override.targets, _override.values, _override.calldatas, _descriptionHash(_override));
     vm.warp(block.timestamp + 1);
     supermajorityGovernor.execute(_override.targets, _override.values, _override.calldatas, _descriptionHash(_override));
+
+    _assertOverriddenProposalExecutes(_proposal, _proposalId);
+  }
+
+  function test_SupermajorityOverridesATokenHolderVetoWithOneWeiFewerAgainstThanForVotes() public {
+    _dealAndDelegateZk(supermajorityOpponent, _supermajorityQuorum() - 1);
+    Proposal memory _proposal = _protocolUpgradeProposal();
+    uint256 _proposalId = _passAndVetoByTokenHolders(_proposal);
+
+    uint256 _overrideProposalId = _voteOnVetoOverrideWithTheQuorumForAndTheOpponentAgainst(_proposalId);
+    assertEq(uint8(supermajorityGovernor.state(_overrideProposalId)), uint8(IGovernor.ProposalState.Succeeded));
+    _queueAndExecuteVetoOverride(_proposalId);
 
     _assertOverriddenProposalExecutes(_proposal, _proposalId);
   }
@@ -107,16 +158,19 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
     Proposal memory _proposal = _protocolUpgradeProposal();
     uint256 _proposalId = _passAndVetoByTokenHolders(_proposal);
 
-    uint256 _overrideProposalId = _proposeVetoOverride(_proposalId);
-    _warpToSupermajorityVoting(_overrideProposalId);
-    _castSupermajorityVote(supermajoritySupporter, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.For));
-    _warpPastSupermajorityDeadline(_overrideProposalId);
+    uint256 _overrideProposalId = _voteOnVetoOverrideWithOnlyTheSupporterFor(_proposalId);
 
-    assertEq(uint8(supermajorityGovernor.state(_overrideProposalId)), uint8(IGovernor.ProposalState.Defeated));
-    Proposal memory _override = _vetoOverrideProposal(_proposalId);
-    vm.expectRevert("Governor: proposal not successful");
-    supermajorityGovernor.queue(_override.targets, _override.values, _override.calldatas, _descriptionHash(_override));
-    _assertVetoStands(_proposal, _proposalId);
+    _assertOverrideIsDefeatedAndVetoStands(_proposal, _proposalId, _overrideProposalId);
+  }
+
+  function test_VetoStandsWhenTheOverrideGetsOneWeiFewerForVotesThanTheQuorum() public {
+    _dealAndDelegateZk(supermajoritySupporter, _supermajorityQuorum() - 1);
+    Proposal memory _proposal = _protocolUpgradeProposal();
+    uint256 _proposalId = _passAndVetoByTokenHolders(_proposal);
+
+    uint256 _overrideProposalId = _voteOnVetoOverrideWithOnlyTheSupporterFor(_proposalId);
+
+    _assertOverrideIsDefeatedAndVetoStands(_proposal, _proposalId, _overrideProposalId);
   }
 
   function testFuzz_VetoStandsWhenTheOverrideMeetsTheQuorumButDoesNotGetMoreForThanAgainstVotes(uint256 _againstVotes)
@@ -130,17 +184,19 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
     Proposal memory _proposal = _protocolUpgradeProposal();
     uint256 _proposalId = _passAndVetoByTokenHolders(_proposal);
 
-    uint256 _overrideProposalId = _proposeVetoOverride(_proposalId);
-    _warpToSupermajorityVoting(_overrideProposalId);
-    _castSupermajorityVote(supermajorityVoter, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.For));
-    _castSupermajorityVote(supermajorityOpponent, _overrideProposalId, uint8(GovernorCountingSimple.VoteType.Against));
-    _warpPastSupermajorityDeadline(_overrideProposalId);
+    uint256 _overrideProposalId = _voteOnVetoOverrideWithTheQuorumForAndTheOpponentAgainst(_proposalId);
 
-    assertEq(uint8(supermajorityGovernor.state(_overrideProposalId)), uint8(IGovernor.ProposalState.Defeated));
-    Proposal memory _override = _vetoOverrideProposal(_proposalId);
-    vm.expectRevert("Governor: proposal not successful");
-    supermajorityGovernor.queue(_override.targets, _override.values, _override.calldatas, _descriptionHash(_override));
-    _assertVetoStands(_proposal, _proposalId);
+    _assertOverrideIsDefeatedAndVetoStands(_proposal, _proposalId, _overrideProposalId);
+  }
+
+  function test_VetoStandsWhenTheOverridesForAndAgainstVotesTieAtTheQuorum() public {
+    _dealAndDelegateZk(supermajorityOpponent, _supermajorityQuorum());
+    Proposal memory _proposal = _protocolUpgradeProposal();
+    uint256 _proposalId = _passAndVetoByTokenHolders(_proposal);
+
+    uint256 _overrideProposalId = _voteOnVetoOverrideWithTheQuorumForAndTheOpponentAgainst(_proposalId);
+
+    _assertOverrideIsDefeatedAndVetoStands(_proposal, _proposalId, _overrideProposalId);
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -175,6 +231,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
 
     assertFalse(vetoGovernor.isVetoOverridden(_proposalId));
     _assertStates(_proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Succeeded);
+    _assertUpgradeNotExecuted();
   }
 
   function test_RevertIf_TheSupermajorityExecutesAnOverrideOfAProposalThatIsNotDefeated() public {
@@ -203,6 +260,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverridesTest is ZkProtocolUpgr
 
     assertFalse(vetoGovernor.isVetoOverridden(_proposalId));
     _assertStates(_proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Succeeded);
+    _assertUpgradeNotExecuted();
   }
 }
 
