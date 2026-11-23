@@ -71,6 +71,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoesTest is ZkProtocolUpgradeGove
     uint256 _proposalId = _passCouncilProposal(_proposal);
 
     _dealAndCastVeto(tokenHolder, _vetoThreshold() - 1, _proposalId);
+    assertEq(vetoGovernor.proposalVotes(_proposalId), _vetoThreshold() - 1);
     _warpPastVetoDeadline(_proposalId);
     _assertStates(_proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Succeeded);
     _queueOnProtocolTimelock(_proposal);
@@ -78,6 +79,17 @@ abstract contract ZkProtocolUpgradeGovernanceVetoesTest is ZkProtocolUpgradeGove
 
     _assertUpgradeExecutedByProtocolTimelock(_proposal);
     _assertStates(_proposalId, IGovernor.ProposalState.Executed, IGovernor.ProposalState.Executed);
+  }
+
+  function test_VetoVotesAtTheVetoThresholdVetoTheProposal() public {
+    Proposal memory _proposal = _protocolUpgradeProposal();
+    uint256 _proposalId = _passCouncilProposal(_proposal);
+
+    _dealAndCastVeto(tokenHolder, _vetoThreshold(), _proposalId);
+    assertEq(vetoGovernor.proposalVotes(_proposalId), _vetoThreshold());
+    _warpPastVetoDeadline(_proposalId);
+
+    _assertVetoedProposalIsStuck(_proposal, _proposalId);
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -243,6 +255,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoesTest is ZkProtocolUpgradeGove
     Proposal memory _proposal = _protocolUpgradeProposal();
     uint256 _proposalId = _passCouncilProposal(_proposal);
     _dealAndCastVeto(tokenHolder, _vetoVotes, _proposalId);
+    assertEq(vetoGovernor.proposalVotes(_proposalId), _vetoVotes);
 
     vm.prank(_deploymentParams().governanceAdmin);
     vetoGovernor.setVetoThreshold(_newVetoThreshold);
