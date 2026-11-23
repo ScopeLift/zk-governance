@@ -300,8 +300,14 @@ abstract contract ZkProtocolUpgradeGovernanceTest is TestHelpers, Constants, ZkP
   }
 
   /// @notice `_holder` gets `_votes` ZK votes, which count at `_proposalId`'s snapshot, and casts them as a veto once
-  /// voting opens. Call it while the proposal is Pending on the Veto Governor; it warps to the start of voting.
+  /// voting opens. Call it while the proposal is Pending on the Veto Governor; it warps to the start of voting. Votes
+  /// dealt once the proposal is Active would land after the snapshot and count for nothing, so a second holder gets its
+  /// votes from `_dealAndDelegateZk` before the first call and casts them with `_castVeto`.
   function _dealAndCastVeto(address _holder, uint256 _votes, uint256 _proposalId) internal {
+    require(
+      vetoGovernor.state(_proposalId) == IGovernor.ProposalState.Pending,
+      "_dealAndCastVeto: the proposal is not Pending on the Veto Governor"
+    );
     _dealAndDelegateZk(_holder, _votes);
     _warpToVetoVoting(_proposalId);
     _castVeto(_holder, _proposalId);

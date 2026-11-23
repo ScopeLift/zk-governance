@@ -15,6 +15,7 @@ contract Constants {
   /// @notice An Era mainnet block before the Protocol Timelock role migration, while `ZkProtocolGovernor` holds the
   /// Protocol Timelock roles. The smoke tests deploy the council governance and run the migration on a fork of it.
   uint256 constant ERA_MAINNET_FORK_BLOCK = 72_650_000;
+  uint256 constant ERA_MAINNET_CHAIN_ID = 324;
 
   /// @notice The main l2-contracts project's build output, relative to this project. The smoke tests deploy the
   /// OpenZeppelin v4 contracts that project builds, which this project cannot compile, from its artifacts: EVM ones in

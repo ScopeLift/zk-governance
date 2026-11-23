@@ -26,7 +26,9 @@ abstract contract ZkProtocolUpgradeGovernanceSetupTest is ZkProtocolUpgradeGover
     assertFalse(protocolTimelock.hasRole(CANCELLER_ROLE, address(protocolGovernor)));
   }
 
-  function test_SupermajorityGovernorAndOverrideTimelockRunTheMainProjectsEraVmBytecode() public view {
+  // Shows the deployments landed in EraVM with the bytecode in the main project's `zkout`. It does not show that
+  // `zkout` is a current build of that project's sources.
+  function test_SupermajorityGovernorAndOverrideTimelockRunTheEraVmBytecodeInTheMainProjectsArtifacts() public view {
     assertEq(
       ACCOUNT_CODE_STORAGE.getRawCodeHash(address(supermajorityGovernor)),
       _mainProjectEraVmBytecodeHash(SUPERMAJORITY_GOVERNOR_ARTIFACT)

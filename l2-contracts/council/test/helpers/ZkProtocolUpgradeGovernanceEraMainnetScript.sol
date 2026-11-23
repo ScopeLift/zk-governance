@@ -42,6 +42,8 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
 {
   function _setUpNetwork() internal override {
     vm.createSelectFork(vm.envOr("ZKSYNC_RPC_URL", string("https://mainnet.era.zksync.io")), ERA_MAINNET_FORK_BLOCK);
+    // The main project's scripts read the same variable for whichever network they target.
+    require(block.chainid == ERA_MAINNET_CHAIN_ID, "setUp: ZKSYNC_RPC_URL is not an Era mainnet RPC");
     // The deployer pays the fees of the EraVM transactions the deploy scripts broadcast.
     vm.deal(DEFAULT_SENDER, 1 ether);
   }
@@ -117,6 +119,8 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
   /// this project compiles. `zkRegisterContract` gives the contract no factory dependencies, so its bytecode is also
   /// stored on an unused account, where EraVM can load it, and marked as known.
   function _registerMainProjectContract(string memory _artifact) internal {
+    _requireMainProjectArtifact(_mainProjectEvmArtifact(_artifact));
+    _requireMainProjectArtifact(string.concat(MAIN_PROJECT_ERAVM_ARTIFACTS, _artifact));
     string memory _evmArtifact = vm.readFile(_mainProjectEvmArtifact(_artifact));
     string memory _eraVmArtifact = vm.readFile(string.concat(MAIN_PROJECT_ERAVM_ARTIFACTS, _artifact));
     bytes memory _evmDeployedBytecode = vm.parseJsonBytes(_evmArtifact, ".deployedBytecode.object");
@@ -140,6 +144,19 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
 
   function _mainProjectEvmArtifact(string memory _artifact) internal pure returns (string memory) {
     return string.concat(MAIN_PROJECT_EVM_ARTIFACTS, _artifact);
+  }
+
+  // Without this, a missing build fails every test with a bare `vm.readFile` error that names neither build.
+  function _requireMainProjectArtifact(string memory _path) internal view {
+    require(
+      vm.isFile(_path),
+      string.concat(
+        "setUp: ",
+        _path,
+        " is missing; in l2-contracts, run `forge build src/ZkProtocolGovernor.sol` and",
+        " `forge build --zksync src/ZkProtocolGovernor.sol`"
+      )
+    );
   }
 
   /*///////////////////////////////////////////////////////////////
