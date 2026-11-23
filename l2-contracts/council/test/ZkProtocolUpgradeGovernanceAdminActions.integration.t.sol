@@ -43,6 +43,101 @@ abstract contract ZkProtocolUpgradeGovernanceAdminActionsTest is ZkProtocolUpgra
     );
   }
 
+  /// @notice `_caller` calls every function on the Veto Governor that only the governance admin may call, each with a
+  /// value other than the current one, and each call is expected to revert because `_caller` is not the admin.
+  function _expectRevertOnEveryVetoGovernorSettingChange(address _caller) internal {
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVetoThreshold(1);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVetoGuardian(_caller);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVetoOverrideRole(_caller);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVetoOverrideDuration(type(uint48).max);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVotingDelay(0);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVotingPeriod(1);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setProposalThreshold(1);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setVotingPeriodExtension(0);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.setMinorVetoExtensionThresholdPct(0);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.updateVetoThresholdNumerator(0);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.updateTimelock(TimelockController(payable(_caller)));
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    vetoGovernor.relay(_caller, 0, "");
+  }
+
+  /// @notice Asserts that the Veto Governor's settings are the ones it was deployed with.
+  function _assertVetoGovernorSettingsUnchanged() internal view {
+    DeploymentParams memory _params = _deploymentParams();
+    assertEq(vetoGovernor.vetoThreshold(block.timestamp), _vetoThreshold());
+    assertEq(vetoGovernor.vetoGuardian(), _params.vetoGovernorVetoGuardian);
+    assertEq(vetoGovernor.vetoOverrideRole(), address(overrideTimelock));
+    assertEq(vetoGovernor.vetoOverrideDuration(), _params.vetoGovernorVetoOverrideDuration);
+    assertEq(vetoGovernor.votingDelay(), _params.vetoGovernorVotingDelay);
+    assertEq(vetoGovernor.votingPeriod(), _params.vetoGovernorVotingPeriod);
+    assertEq(vetoGovernor.proposalThreshold(), _params.vetoGovernorProposalThreshold);
+    assertEq(vetoGovernor.votingPeriodExtension(), _params.vetoGovernorVotingPeriodExtension);
+    assertEq(vetoGovernor.minorVetoExtensionThresholdPct(), _params.vetoGovernorVotingPeriodExtensionThresholdPct);
+    assertEq(vetoGovernor.timelock(), address(protocolTimelock));
+  }
+
+  /// @notice `_caller` calls every function on the Council Governor that only the governance admin may call, each with
+  /// a value other than the current one, and each call is expected to revert because `_caller` is not the admin.
+  function _expectRevertOnEveryCouncilGovernorSettingChange(address _caller) internal {
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.setVotingDelay(0);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.setVotingPeriod(1);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.setProposalThreshold(0);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.updateQuorumNumerator(1);
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.updateSuperQuorumNumerator(1);
+    // Pointing the council at a veto governor the caller controls would skip the token holder and guardian vetoes.
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.setCouncilVetoGovernor(IGovernor(_caller));
+    _expectRevertNotTheGovernanceAdmin(_caller);
+    vm.prank(_caller);
+    councilGovernor.relay(_caller, 0, "");
+  }
+
+  /// @notice Asserts that the Council Governor's settings are the ones it was deployed with. Its quorum fractions are
+  /// not deployment parameters, and both are zero.
+  function _assertCouncilGovernorSettingsUnchanged() internal view {
+    DeploymentParams memory _params = _deploymentParams();
+    assertEq(councilGovernor.votingDelay(), _params.councilGovernorVotingDelay);
+    assertEq(councilGovernor.votingPeriod(), _params.councilGovernorVotingPeriod);
+    assertEq(councilGovernor.proposalThreshold(), _params.councilGovernorProposalThreshold);
+    assertEq(address(councilGovernor.councilVetoGovernor()), address(vetoGovernor));
+    assertEq(councilGovernor.quorumNumerator(), 0);
+    assertEq(councilGovernor.superQuorumNumerator(), 0);
+  }
+
   /*///////////////////////////////////////////////////////////////
                            After the migration
   //////////////////////////////////////////////////////////////*/
@@ -153,93 +248,35 @@ abstract contract ZkProtocolUpgradeGovernanceAdminActionsTest is ZkProtocolUpgra
 
   function testFuzz_RevertIf_AnyoneButTheGovernanceAdminChangesTheVetoGovernorsSettings(address _caller) public {
     _assumeNotTheGovernanceAdmin(_caller);
-    DeploymentParams memory _params = _deploymentParams();
-    uint256 _vetoThreshold = vetoGovernor.vetoThreshold(block.timestamp);
 
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVetoThreshold(1);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVetoGuardian(_caller);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVetoOverrideRole(_caller);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVetoOverrideDuration(type(uint48).max);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVotingDelay(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVotingPeriod(1);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setProposalThreshold(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setVotingPeriodExtension(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.setMinorVetoExtensionThresholdPct(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.updateVetoThresholdNumerator(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.updateTimelock(TimelockController(payable(_caller)));
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    vetoGovernor.relay(_caller, 0, "");
+    _expectRevertOnEveryVetoGovernorSettingChange(_caller);
 
-    assertEq(vetoGovernor.vetoThreshold(block.timestamp), _vetoThreshold);
-    assertEq(vetoGovernor.vetoGuardian(), _params.vetoGovernorVetoGuardian);
-    assertEq(vetoGovernor.vetoOverrideRole(), address(overrideTimelock));
-    assertEq(vetoGovernor.vetoOverrideDuration(), _params.vetoGovernorVetoOverrideDuration);
-    assertEq(vetoGovernor.votingDelay(), _params.vetoGovernorVotingDelay);
-    assertEq(vetoGovernor.votingPeriod(), _params.vetoGovernorVotingPeriod);
-    assertEq(vetoGovernor.proposalThreshold(), _params.vetoGovernorProposalThreshold);
-    assertEq(vetoGovernor.votingPeriodExtension(), _params.vetoGovernorVotingPeriodExtension);
-    assertEq(vetoGovernor.minorVetoExtensionThresholdPct(), _params.vetoGovernorVotingPeriodExtensionThresholdPct);
-    assertEq(vetoGovernor.timelock(), address(protocolTimelock));
+    _assertVetoGovernorSettingsUnchanged();
+  }
+
+  /// @dev OpenZeppelin's default `onlyGovernance` authorizes a governor's executor, here the Protocol Timelock, which
+  /// would let an executed council proposal change the veto rules it passed under. The fuzzed caller above is never
+  /// that address.
+  function test_RevertIf_TheProtocolTimelockChangesTheVetoGovernorsSettings() public {
+    _expectRevertOnEveryVetoGovernorSettingChange(address(protocolTimelock));
+
+    _assertVetoGovernorSettingsUnchanged();
   }
 
   function testFuzz_RevertIf_AnyoneButTheGovernanceAdminChangesTheCouncilGovernorsSettings(address _caller) public {
     _assumeNotTheGovernanceAdmin(_caller);
-    DeploymentParams memory _params = _deploymentParams();
-    uint256 _quorumNumerator = councilGovernor.quorumNumerator();
-    uint256 _superQuorumNumerator = councilGovernor.superQuorumNumerator();
 
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.setVotingDelay(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.setVotingPeriod(1);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.setProposalThreshold(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.updateQuorumNumerator(0);
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.updateSuperQuorumNumerator(0);
-    // Pointing the council at a veto governor the caller controls would skip the token holder and guardian vetoes.
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.setCouncilVetoGovernor(IGovernor(_caller));
-    _expectRevertNotTheGovernanceAdmin(_caller);
-    vm.prank(_caller);
-    councilGovernor.relay(_caller, 0, "");
+    _expectRevertOnEveryCouncilGovernorSettingChange(_caller);
 
-    assertEq(councilGovernor.votingDelay(), _params.councilGovernorVotingDelay);
-    assertEq(councilGovernor.votingPeriod(), _params.councilGovernorVotingPeriod);
-    assertEq(councilGovernor.proposalThreshold(), _params.councilGovernorProposalThreshold);
-    assertEq(address(councilGovernor.councilVetoGovernor()), address(vetoGovernor));
-    assertEq(councilGovernor.quorumNumerator(), _quorumNumerator);
-    assertEq(councilGovernor.superQuorumNumerator(), _superQuorumNumerator);
+    _assertCouncilGovernorSettingsUnchanged();
+  }
+
+  /// @dev OpenZeppelin's default `onlyGovernance` authorizes a governor's executor, here the Veto Governor. The fuzzed
+  /// caller above is never that address.
+  function test_RevertIf_TheVetoGovernorChangesTheCouncilGovernorsSettings() public {
+    _expectRevertOnEveryCouncilGovernorSettingChange(address(vetoGovernor));
+
+    _assertCouncilGovernorSettingsUnchanged();
   }
 
   /*///////////////////////////////////////////////////////////////
