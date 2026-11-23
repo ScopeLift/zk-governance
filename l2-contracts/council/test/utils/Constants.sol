@@ -18,8 +18,8 @@ contract Constants {
 
   /// @notice The main l2-contracts project's build output, relative to this project. The smoke tests deploy the
   /// OpenZeppelin v4 contracts that project builds, which this project cannot compile, from its artifacts: EVM ones in
-  /// `out` and EraVM ones in `zkout`. Run `forge build --skip test --skip script` and
-  /// `forge build --zksync --skip test --skip script` in `l2-contracts` first, since the `--zksync` build writes only
+  /// `out` and EraVM ones in `zkout`. Run `forge build src/ZkProtocolGovernor.sol` and
+  /// `forge build --zksync src/ZkProtocolGovernor.sol` in `l2-contracts` first, since the `--zksync` build writes only
   /// `zkout`.
   string constant MAIN_PROJECT_EVM_ARTIFACTS = "../out/";
   string constant MAIN_PROJECT_ERAVM_ARTIFACTS = "../zkout/";

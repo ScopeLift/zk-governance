@@ -63,15 +63,17 @@ jobs:
       - name: Install the main l2-contracts project's dependencies
         timeout-minutes: 10
         working-directory: ./l2-contracts
-        run: git submodule update --init lib/forge-std lib/openzeppelin-contracts lib/openzeppelin-contracts-upgradeable
+        run: git submodule update --init lib/openzeppelin-contracts lib/openzeppelin-contracts-upgradeable
 
-      # `forge build --zksync` writes only the EraVM artifacts, so the EVM ones need a plain build too.
+      # Builds only the Supermajority Governor, which also compiles the override timelock it imports. A whole-project
+      # build would compile the test helpers too, and those need forge-std's own nested submodule. `forge build --zksync`
+      # writes only the EraVM artifacts, so the EVM ones need a plain build too.
       - name: Build the main l2-contracts project's artifacts
         timeout-minutes: 30
         working-directory: ./l2-contracts
         run: |
-          forge build --skip test --skip script
-          forge build --zksync --skip test --skip script
+          forge build src/ZkProtocolGovernor.sol
+          forge build --zksync src/ZkProtocolGovernor.sol
 
       # The smoke tests fork Era mainnet at a pinned block, and foundry caches the state each fork reads. Restoring the
       # cache spares the public RPC most requests, so a slow or rate-limited RPC is less likely to fail the run.

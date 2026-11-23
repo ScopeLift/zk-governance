@@ -21,8 +21,8 @@ import {IZkCheatcodes} from "test/interfaces/IZkCheatcodes.sol";
 /// @notice The protocol upgrade governance deployed on a fork of Era mainnet with the Era mainnet configuration, and
 /// handed the Protocol Timelock roles by a role migration proposal that passes through the live `ZkProtocolGovernor`.
 /// The ZK token, the Protocol Timelock and `ZkProtocolGovernor` are the live contracts.
-/// @dev Run under `--zksync`, after `forge build --skip test --skip script` and
-/// `forge build --zksync --skip test --skip script` in the main l2-contracts project, which write its EVM and EraVM
+/// @dev Run under `--zksync`, after `forge build src/ZkProtocolGovernor.sol` and
+/// `forge build --zksync src/ZkProtocolGovernor.sol` in the main l2-contracts project, which write its EVM and EraVM
 /// artifacts. The deployment follows the production steps:
 ///
 /// `DeploySupermajorityGovernor` deploys the override timelock and the Supermajority Governor, which are OpenZeppelin

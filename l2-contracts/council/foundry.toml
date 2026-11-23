@@ -7,8 +7,8 @@
 # overwriting each other's artifacts. The contracts build from this project alone: council-governance is their only
 # dependency, and OpenZeppelin v5 and forge-std come from council-governance's own submodules, the versions upstream
 # builds and tests with. The fork smoke tests (`test/*.integration.t.sol`) also deploy the main project's OpenZeppelin
-# v4 Supermajority Governor and override timelock from its build output, so run `forge build --skip test --skip script`
-# and `forge build --zksync --skip test --skip script` in `l2-contracts` before running them.
+# v4 Supermajority Governor and override timelock from its build output, so run `forge build src/ZkProtocolGovernor.sol`
+# and `forge build --zksync src/ZkProtocolGovernor.sol` in `l2-contracts` before running them.
 #
 # EraVM bytecode depends on the zksolc version. Build and deploy with foundry-zksync v0.1.10 (zksolc 1.5.15), the
 # release the council workflow installs. zksolc isn't pinned here, because stock forge warns about the `zksync` section
