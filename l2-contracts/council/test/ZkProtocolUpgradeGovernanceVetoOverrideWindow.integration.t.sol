@@ -28,7 +28,12 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
   function _passAndVetoByTokenHoldersAtVotingStart(Proposal memory _proposal) internal returns (uint256 _proposalId) {
     _proposalId = _passCouncilProposal(_proposal);
     uint256 _originalDeadline = vetoGovernor.proposalDeadline(_proposalId);
-    _dealAndCastVeto(tokenHolder, _deploymentParams().vetoGovernorVetoThreshold, _proposalId);
+    _dealAndCastVeto(tokenHolder, _vetoThreshold(), _proposalId);
+    // The deadline is extended from half the veto threshold, so an extended deadline alone does not show a veto.
+    require(
+      vetoGovernor.proposalVotes(_proposalId) >= vetoGovernor.vetoThreshold(vetoGovernor.proposalSnapshot(_proposalId)),
+      "_passAndVetoByTokenHoldersAtVotingStart: the AGAINST votes did not reach the veto threshold"
+    );
     require(
       vetoGovernor.proposalDeadline(_proposalId)
         == _originalDeadline + _deploymentParams().vetoGovernorVotingPeriodExtension,
@@ -93,15 +98,23 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _assertStates(_proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Succeeded);
   }
 
-  /// @notice Asserts that the veto on `_proposalId` was not overridden and the proposal is in `_councilState` and
-  /// `_vetoGovernorState`, with the target never called.
+  /// @notice Asserts that the veto on `_proposal` was not overridden and the proposal is in `_councilState` and
+  /// `_vetoGovernorState`, either Active or Defeated on the Veto Governor, so it can be neither queued on the Protocol
+  /// Timelock nor executed through the council, and the target was never called.
   function _assertNotOverridden(
+    Proposal memory _proposal,
     uint256 _proposalId,
     IGovernor.ProposalState _councilState,
     IGovernor.ProposalState _vetoGovernorState
-  ) internal view {
+  ) internal {
     assertFalse(vetoGovernor.isVetoOverridden(_proposalId));
     _assertStates(_proposalId, _councilState, _vetoGovernorState);
+    _expectRevertUnexpectedState(_proposalId, _vetoGovernorState, IGovernor.ProposalState.Succeeded);
+    _queueOnProtocolTimelock(_proposal);
+    _expectRevertUnexpectedState(
+      _proposalId, _vetoGovernorState, IGovernor.ProposalState.Succeeded, IGovernor.ProposalState.Queued
+    );
+    _executeThroughCouncil(_proposal);
     _assertUpgradeNotExecuted();
   }
 
@@ -122,7 +135,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     );
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Active);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Active);
   }
 
   function testFuzz_RevertIf_AnEarlyGuardianVetoIsOverriddenBeforeTheDeadline(uint256 _time) public {
@@ -134,7 +147,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _expectRevertOutsideWindow(_proposalId);
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -149,7 +162,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _expectRevertOutsideWindow(_proposalId);
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
   }
 
   function test_GuardianVetoIsOverriddenAtTheDeadline() public {
@@ -176,7 +189,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     );
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Active);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Queued, IGovernor.ProposalState.Active);
   }
 
   function test_TokenHolderVetoIsOverriddenOneSecondAfterTheDeadline() public {
@@ -221,7 +234,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _expectRevertOutsideWindow(_proposalId);
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
   }
 
   function test_RevertIf_AGuardianVetoIsOverriddenOneSecondAfterTheWindowCloses() public {
@@ -232,7 +245,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _expectRevertOutsideWindow(_proposalId);
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -249,7 +262,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _expectRevertOutsideWindow(_proposalId);
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
   }
 
   function test_GuardianVetoIsOverriddenAtTheExtendedDeadline() public {
@@ -280,7 +293,7 @@ abstract contract ZkProtocolUpgradeGovernanceVetoOverrideWindowTest is ZkProtoco
     _expectRevertOutsideWindow(_proposalId);
     _overrideVetoFromTheOverrideTimelock(_proposalId);
 
-    _assertNotOverridden(_proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
+    _assertNotOverridden(_proposal, _proposalId, IGovernor.ProposalState.Defeated, IGovernor.ProposalState.Defeated);
   }
 
   /*///////////////////////////////////////////////////////////////
