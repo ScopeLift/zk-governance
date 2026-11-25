@@ -97,8 +97,8 @@ abstract contract ZkProtocolUpgradeGovernanceChecks is SupermajorityGovernorChec
     if (address(_governor.token()) != address(_deployment.councilToken)) {
       revert("ZkProtocolUpgradeGovernanceChecks: council governor token is not the council token");
     }
-    if (_governor.QUORUM() != _params.votesPerCouncilSeat) {
-      revert("ZkProtocolUpgradeGovernanceChecks: council governor seat size does not match the params");
+    if (_governor.QUORUM() != _params.councilGovernorQuorumSeats * _params.votesPerCouncilSeat) {
+      revert("ZkProtocolUpgradeGovernanceChecks: council governor quorum does not match the params");
     }
     if (address(_governor.councilVetoGovernor()) != address(_deployment.vetoGovernor)) {
       revert("ZkProtocolUpgradeGovernanceChecks: council governor does not submit proposals to the Veto Governor");

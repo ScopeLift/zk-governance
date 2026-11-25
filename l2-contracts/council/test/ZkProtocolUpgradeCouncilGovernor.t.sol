@@ -25,7 +25,12 @@ contract ZkProtocolUpgradeCouncilGovernorTest is TestHelpers, Constants {
     councilToken = new CouncilERC20("Council Seat", "SEAT", address(this), VOTES_PER_SEAT);
     vetoGovernor = new FakeCouncilVetoGovernor();
     governor = new ZkProtocolUpgradeCouncilGovernor(
-      "Council Governor", councilToken, IGovernor(address(vetoGovernor)), governorAdmin, _councilParams(0, 0)
+      "Council Governor",
+      councilToken,
+      IGovernor(address(vetoGovernor)),
+      governorAdmin,
+      _councilParams(0, 0),
+      QUORUM_SEATS
     );
   }
 
@@ -81,10 +86,11 @@ contract ZkProtocolUpgradeCouncilGovernorTest is TestHelpers, Constants {
     vm.warp(governor.proposalSnapshot(_proposalId) + 1);
   }
 
-  // Passes the proposal with one FOR seat and queues it, which submits it to the veto governor.
+  // Passes the proposal with FOR votes from `QUORUM_SEATS` members and queues it, which submits it to the veto
+  // governor. At least `QUORUM_SEATS` members must be seated.
   function _passAndQueue(string memory _description) internal returns (uint256 _proposalId) {
     _proposalId = _proposeAndOpenVoting(_description);
-    _castVote(_proposalId, members[0], GovernorCountingSimple.VoteType.For);
+    _castForVotes(_proposalId, QUORUM_SEATS);
     (address[] memory _targets, uint256[] memory _values, bytes[] memory _calldatas) = _proposalActions();
     governor.queue(_targets, _values, _calldatas, keccak256(bytes(_description)));
   }
@@ -92,6 +98,13 @@ contract ZkProtocolUpgradeCouncilGovernorTest is TestHelpers, Constants {
   function _castVote(uint256 _proposalId, address _voter, GovernorCountingSimple.VoteType _support) internal {
     vm.prank(_voter);
     governor.castVote(_proposalId, uint8(_support));
+  }
+
+  // Casts a FOR vote from each of the first `_memberCount` members, which must already be seated.
+  function _castForVotes(uint256 _proposalId, uint256 _memberCount) internal {
+    for (uint256 _i = 0; _i < _memberCount; _i += 1) {
+      _castVote(_proposalId, members[_i], GovernorCountingSimple.VoteType.For);
+    }
   }
 
   // Each bit of `_supportBits` picks whether a member votes AGAINST (0) or ABSTAIN (1).
@@ -116,15 +129,28 @@ contract ZkProtocolUpgradeCouncilGovernorTest is TestHelpers, Constants {
 }
 
 contract Constructor is ZkProtocolUpgradeCouncilGovernorTest {
-  function testFuzz_SetsQuorumToTheCouncilTokensMaximumPerMember(uint256 _votesPerSeat) public {
+  function testFuzz_SetsQuorumToTheGivenNumberOfSeats(uint256 _votesPerSeat, uint256 _quorumSeats) public {
     _votesPerSeat = bound(_votesPerSeat, 1, type(uint256).max);
+    // The quorum in votes, seats times votes per seat, has to fit in a uint256.
+    _quorumSeats = bound(_quorumSeats, 1, type(uint256).max / _votesPerSeat);
     CouncilERC20 _councilToken = new CouncilERC20("Council Seat", "SEAT", address(this), _votesPerSeat);
 
     ZkProtocolUpgradeCouncilGovernor _governor = new ZkProtocolUpgradeCouncilGovernor(
-      "Council Governor", _councilToken, IGovernor(address(0)), governorAdmin, _councilParams(0, 0)
+      "Council Governor", _councilToken, IGovernor(address(0)), governorAdmin, _councilParams(0, 0), _quorumSeats
     );
 
-    assertEq(_governor.QUORUM(), _votesPerSeat);
+    assertEq(_governor.QUORUM(), _quorumSeats * _votesPerSeat);
+  }
+
+  function testFuzz_RevertIf_TheQuorumIsZeroSeats(uint256 _votesPerSeat) public {
+    _votesPerSeat = bound(_votesPerSeat, 1, type(uint256).max);
+    CouncilERC20 _councilToken = new CouncilERC20("Council Seat", "SEAT", address(this), _votesPerSeat);
+    BasicCouncilGovernor.InitialCouncilParams memory _params = _councilParams(0, 0);
+
+    vm.expectRevert(ZkProtocolUpgradeCouncilGovernor.ZkProtocolUpgradeCouncilGovernor__InvalidQuorumSeats.selector);
+    new ZkProtocolUpgradeCouncilGovernor(
+      "Council Governor", _councilToken, IGovernor(address(0)), governorAdmin, _params, 0
+    );
   }
 
   function testFuzz_RevertIf_AQuorumFractionIsConfigured(uint256 _quorumFraction) public {
@@ -133,7 +159,7 @@ contract Constructor is ZkProtocolUpgradeCouncilGovernorTest {
 
     vm.expectRevert(ZkProtocolUpgradeCouncilGovernor.ZkProtocolUpgradeCouncilGovernor__QuorumFractionDisabled.selector);
     new ZkProtocolUpgradeCouncilGovernor(
-      "Council Governor", councilToken, IGovernor(address(0)), governorAdmin, _params
+      "Council Governor", councilToken, IGovernor(address(0)), governorAdmin, _params, QUORUM_SEATS
     );
   }
 
@@ -143,7 +169,7 @@ contract Constructor is ZkProtocolUpgradeCouncilGovernorTest {
 
     vm.expectRevert(ZkProtocolUpgradeCouncilGovernor.ZkProtocolUpgradeCouncilGovernor__QuorumFractionDisabled.selector);
     new ZkProtocolUpgradeCouncilGovernor(
-      "Council Governor", councilToken, IGovernor(address(0)), governorAdmin, _params
+      "Council Governor", councilToken, IGovernor(address(0)), governorAdmin, _params, QUORUM_SEATS
     );
   }
 }
@@ -155,18 +181,18 @@ contract CountingMode is ZkProtocolUpgradeCouncilGovernorTest {
 }
 
 contract Quorum is ZkProtocolUpgradeCouncilGovernorTest {
-  function testFuzz_TheVotesOfOneSeatForAnyNumberOfMembers(uint256 _memberCount, uint256 _timepoint) public {
+  function testFuzz_TheVotesOfTheQuorumSeatsForAnyNumberOfMembers(uint256 _memberCount, uint256 _timepoint) public {
     _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
 
-    assertEq(governor.quorum(_timepoint), VOTES_PER_SEAT);
+    assertEq(governor.quorum(_timepoint), QUORUM_SEATS * VOTES_PER_SEAT);
   }
 }
 
 contract SuperQuorum is ZkProtocolUpgradeCouncilGovernorTest {
-  function testFuzz_TheVotesOfOneSeatForAnyNumberOfMembers(uint256 _memberCount, uint256 _timepoint) public {
+  function testFuzz_TheVotesOfTheQuorumSeatsForAnyNumberOfMembers(uint256 _memberCount, uint256 _timepoint) public {
     _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
 
-    assertEq(governor.superQuorum(_timepoint), VOTES_PER_SEAT);
+    assertEq(governor.superQuorum(_timepoint), QUORUM_SEATS * VOTES_PER_SEAT);
   }
 }
 
@@ -188,26 +214,37 @@ contract Propose is ZkProtocolUpgradeCouncilGovernorTest {
 }
 
 contract State is ZkProtocolUpgradeCouncilGovernorTest {
-  function testFuzz_SucceededAsSoonAsOneMemberVotesForWithAnyNumberOfMembers(uint256 _memberCount) public {
-    _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
+  function testFuzz_SucceededAsSoonAsAQuorumOfMembersVotesForWithAnyNumberOfMembers(uint256 _memberCount) public {
+    _seatMembers(bound(_memberCount, QUORUM_SEATS, MAX_MEMBER_COUNT));
     uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
 
-    _castVote(_proposalId, members[0], GovernorCountingSimple.VoteType.For);
+    _castForVotes(_proposalId, QUORUM_SEATS);
 
     _assertState(_proposalId, IGovernor.ProposalState.Succeeded);
+  }
+
+  function testFuzz_ActiveThenDefeatedWhenOneMemberFewerThanAQuorumVotesFor(uint256 _memberCount) public {
+    _seatMembers(bound(_memberCount, QUORUM_SEATS, MAX_MEMBER_COUNT));
+    uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
+
+    _castForVotes(_proposalId, QUORUM_SEATS - 1);
+    _assertState(_proposalId, IGovernor.ProposalState.Active);
+
+    _jumpPastTheProposalDeadline(_proposalId);
+    _assertState(_proposalId, IGovernor.ProposalState.Defeated);
   }
 
   function testFuzz_SucceededWhenEveryOtherMemberHasVotedAgainstOrAbstained(uint256 _memberCount, uint256 _supportBits)
     public
   {
-    _seatMembers(bound(_memberCount, 2, MAX_MEMBER_COUNT));
+    _seatMembers(bound(_memberCount, QUORUM_SEATS + 1, MAX_MEMBER_COUNT));
     uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
 
-    // The other members vote first, since the first FOR seat ends voting.
-    for (uint256 _i = 1; _i < members.length; _i += 1) {
+    // The other members vote first, since the FOR vote that reaches quorum ends voting.
+    for (uint256 _i = QUORUM_SEATS; _i < members.length; _i += 1) {
       _castVote(_proposalId, members[_i], _againstOrAbstain(_supportBits, _i));
     }
-    _castVote(_proposalId, members[0], GovernorCountingSimple.VoteType.For);
+    _castForVotes(_proposalId, QUORUM_SEATS);
 
     _assertState(_proposalId, IGovernor.ProposalState.Succeeded);
   }
@@ -236,12 +273,13 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _assertState(_proposalId, IGovernor.ProposalState.Defeated);
   }
 
-  function testFuzz_ActiveThenDefeatedWhenTheOnlyForVoteIsLessThanOneSeat(uint256 _partialSeatVotes) public {
+  function testFuzz_ActiveThenDefeatedWhenForVotesAreLessThanOneSeatShortOfQuorum(uint256 _partialSeatVotes) public {
     _partialSeatVotes = bound(_partialSeatVotes, 1, VOTES_PER_SEAT - 1);
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS - 1);
     address _partialMember = _mintPartialSeat("Partial Member", _partialSeatVotes);
     uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
 
+    _castForVotes(_proposalId, QUORUM_SEATS - 1);
     _castVote(_proposalId, _partialMember, GovernorCountingSimple.VoteType.For);
     _assertState(_proposalId, IGovernor.ProposalState.Active);
 
@@ -249,13 +287,14 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
     _assertState(_proposalId, IGovernor.ProposalState.Defeated);
   }
 
-  function testFuzz_SucceededAsSoonAsPartialForVotesAddUpToOneSeat(uint256 _firstPartialSeatVotes) public {
+  function testFuzz_SucceededAsSoonAsPartialForVotesCompleteTheQuorum(uint256 _firstPartialSeatVotes) public {
     _firstPartialSeatVotes = bound(_firstPartialSeatVotes, 1, VOTES_PER_SEAT - 1);
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS - 1);
     address _firstPartialMember = _mintPartialSeat("First Partial Member", _firstPartialSeatVotes);
     address _secondPartialMember = _mintPartialSeat("Second Partial Member", VOTES_PER_SEAT - _firstPartialSeatVotes);
     uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
 
+    _castForVotes(_proposalId, QUORUM_SEATS - 1);
     _castVote(_proposalId, _firstPartialMember, GovernorCountingSimple.VoteType.For);
     _castVote(_proposalId, _secondPartialMember, GovernorCountingSimple.VoteType.For);
 
@@ -263,7 +302,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
   }
 
   function testFuzz_QueuedWhileTheVetoGovernorHoldsTheProposalInItsTimelock(string memory _description) public {
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Queued);
@@ -272,7 +311,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
   }
 
   function testFuzz_DefeatedOnceTheVetoGovernorDefeatsAQueuedProposal(string memory _description) public {
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Defeated);
@@ -281,7 +320,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
   }
 
   function testFuzz_QueuedAgainOnceTheVetoGovernorOverridesTheVetoOfAQueuedProposal(string memory _description) public {
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Defeated);
 
@@ -292,7 +331,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
   }
 
   function testFuzz_CanceledOnceTheVetoGovernorCancelsAQueuedProposal(string memory _description) public {
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Canceled);
@@ -301,7 +340,7 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
   }
 
   function testFuzz_CanceledOnceAQueuedProposalExpiresInTheVetoGovernor(string memory _description) public {
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Expired);
@@ -324,9 +363,9 @@ contract State is ZkProtocolUpgradeCouncilGovernorTest {
 
 contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
   function testFuzz_ZeroBeforeTheProposalIsQueued(string memory _description) public {
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _proposeAndOpenVoting(_description);
-    _castVote(_proposalId, members[0], GovernorCountingSimple.VoteType.For);
+    _castForVotes(_proposalId, QUORUM_SEATS);
 
     assertEq(governor.proposalEta(_proposalId), 0);
   }
@@ -338,7 +377,7 @@ contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
     // The lower bound keeps the new deadline different from the ETA stored at queue time, so the test proves the ETA
     // is read live from the veto governor.
     _extendedDeadline = bound(_extendedDeadline, vetoGovernor.PROPOSAL_DEADLINE() + 1, type(uint256).max);
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setDeadline(_proposalId, _extendedDeadline);
@@ -352,7 +391,7 @@ contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
     uint256 _vetoEta
   ) public {
     _vetoEta = bound(_vetoEta, 1, type(uint256).max);
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setEta(_proposalId, _vetoEta);
@@ -370,7 +409,7 @@ contract ProposalEta is ZkProtocolUpgradeCouncilGovernorTest {
     _vetoEta = bound(_vetoEta, 1, type(uint256).max);
     // Equal values would pass whichever one the governor returned.
     vm.assume(_vetoEta != _extendedDeadline);
-    _seatMembers(1);
+    _seatMembers(QUORUM_SEATS);
     uint256 _proposalId = _passAndQueue(_description);
 
     vetoGovernor.setDeadline(_proposalId, _extendedDeadline);
@@ -384,9 +423,9 @@ contract Queue is ZkProtocolUpgradeCouncilGovernorTest {
   function testFuzz_SubmitsASucceededProposalToTheVetoGovernor(uint256 _memberCount, string memory _description)
     public
   {
-    _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
+    _seatMembers(bound(_memberCount, QUORUM_SEATS, MAX_MEMBER_COUNT));
 
-    // Queued while its voting period is still running, since the first FOR seat already passed it.
+    // Queued while its voting period is still running, since its FOR votes already reached quorum.
     uint256 _proposalId = _passAndQueue(_description);
 
     // The veto governor received the same actions and description, so it identifies the proposal by the same ID.
@@ -397,12 +436,10 @@ contract Queue is ZkProtocolUpgradeCouncilGovernorTest {
 }
 
 contract CastVote is ZkProtocolUpgradeCouncilGovernorTest {
-  function testFuzz_RevertIf_VotingAfterTheFirstForSeatPassedTheProposal(uint256 _memberCount, uint256 _supportBits)
-    public
-  {
-    _seatMembers(bound(_memberCount, 2, MAX_MEMBER_COUNT));
+  function testFuzz_RevertIf_VotingAfterForVotesReachedQuorum(uint256 _memberCount, uint256 _supportBits) public {
+    _seatMembers(bound(_memberCount, QUORUM_SEATS + 1, MAX_MEMBER_COUNT));
     uint256 _proposalId = _proposeAndOpenVoting(PROPOSAL_DESCRIPTION);
-    _castVote(_proposalId, members[0], GovernorCountingSimple.VoteType.For);
+    _castForVotes(_proposalId, QUORUM_SEATS);
 
     vm.expectRevert(
       abi.encodeWithSelector(
@@ -412,7 +449,7 @@ contract CastVote is ZkProtocolUpgradeCouncilGovernorTest {
         bytes32(1 << uint8(IGovernor.ProposalState.Active))
       )
     );
-    _castVote(_proposalId, members[1], _againstOrAbstain(_supportBits, 1));
+    _castVote(_proposalId, members[QUORUM_SEATS], _againstOrAbstain(_supportBits, QUORUM_SEATS));
   }
 }
 
@@ -420,7 +457,7 @@ contract Execute is ZkProtocolUpgradeCouncilGovernorTest {
   function testFuzz_ExecutesAQueuedProposalThroughTheVetoGovernor(uint256 _memberCount, string memory _description)
     public
   {
-    _seatMembers(bound(_memberCount, 1, MAX_MEMBER_COUNT));
+    _seatMembers(bound(_memberCount, QUORUM_SEATS, MAX_MEMBER_COUNT));
     uint256 _proposalId = _passAndQueue(_description);
     vetoGovernor.setState(_proposalId, IGovernor.ProposalState.Succeeded);
     (address[] memory _targets, uint256[] memory _values, bytes[] memory _calldatas) = _proposalActions();

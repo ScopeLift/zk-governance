@@ -4,6 +4,9 @@ pragma solidity 0.8.30;
 contract Constants {
   uint256 constant VOTES_PER_SEAT = 1e18;
   uint256 constant MAX_MEMBER_COUNT = 20;
+  /// @notice The seats of FOR votes a proposal needs in the test Council Governor. More than one, so the tests cover a
+  /// proposal that has FOR votes but not yet enough of them.
+  uint256 constant QUORUM_SEATS = 2;
   uint48 constant VOTING_DELAY = 1 days;
   uint32 constant VOTING_PERIOD = 3 days;
   uint256 constant MAX_VETO_THRESHOLD = 1e30;

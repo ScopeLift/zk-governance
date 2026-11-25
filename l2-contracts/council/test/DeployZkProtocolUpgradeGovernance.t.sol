@@ -148,7 +148,7 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
 
     assertEq(_councilGovernor.name(), "ZKsync Protocol Upgrade Council");
     assertEq(address(_councilGovernor.token()), address(_script.councilToken()));
-    assertEq(_councilGovernor.QUORUM(), 1e18);
+    assertEq(_councilGovernor.QUORUM(), 2e18);
     assertEq(address(_councilGovernor.councilVetoGovernor()), address(_script.vetoGovernor()));
     assertEq(_councilGovernor.owner(), GOVERNANCE_ADMIN);
     assertEq(_councilGovernor.votingDelay(), 1 days);
@@ -253,6 +253,18 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
 
     vm.expectRevert(
       "DeployZkProtocolUpgradeGovernance: vetoGovernorVetoGuardian is the zero address; set the veto guardian"
+    );
+    _script.run();
+  }
+
+  function testFuzz_RevertIf_TheCouncilQuorumIsMoreSeatsThanThereAreMembers(uint256 _quorumSeats) public {
+    DeploymentParams memory _params = _deploymentParams();
+    (address _governor, TimelockController _timelock) = _deploySupermajorityGovernor(_params);
+    _params.councilGovernorQuorumSeats = _bound(_quorumSeats, _params.councilMembers.length + 1, type(uint256).max);
+    DeployZkProtocolUpgradeGovernanceEraMainnetHarness _script = _deployScript(_params, _governor, _timelock);
+
+    vm.expectRevert(
+      "DeployZkProtocolUpgradeGovernance: councilGovernorQuorumSeats is above the member count; no proposal could pass"
     );
     _script.run();
   }

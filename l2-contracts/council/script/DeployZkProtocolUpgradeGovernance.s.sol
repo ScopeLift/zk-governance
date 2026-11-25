@@ -117,6 +117,11 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
         "DeployZkProtocolUpgradeGovernance: councilGovernorProposalThreshold is above one seat; no member could propose"
       );
     }
+    if (_params.councilGovernorQuorumSeats > _params.councilMembers.length) {
+      revert(
+        "DeployZkProtocolUpgradeGovernance: councilGovernorQuorumSeats is above the member count; no proposal could pass"
+      );
+    }
   }
 
   function _logDeploymentParams(
@@ -132,6 +137,7 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
     _log(string.concat("  overrideTimelock:      ", vm.toString(address(_deployment.overrideTimelock))));
     _log(string.concat("  supermajorityDeployer: ", vm.toString(_supermajorityGovernorDeployerAccount)));
     _log(string.concat("  vetoThreshold:         ", vm.toString(_params.vetoGovernorVetoThreshold)));
+    _log(string.concat("  council quorum seats:  ", vm.toString(_params.councilGovernorQuorumSeats)));
     _log(string.concat("  council members:       ", vm.toString(_params.councilMembers.length)));
     for (uint256 _i = 0; _i < _params.councilMembers.length; _i += 1) {
       _log(string.concat("    ", vm.toString(_params.councilMembers[_i])));
@@ -174,10 +180,11 @@ abstract contract DeployZkProtocolUpgradeGovernance is ZkProtocolUpgradeGovernan
         initialVotingDelay: _params.councilGovernorVotingDelay,
         initialVotingPeriod: _params.councilGovernorVotingPeriod,
         initialProposalThreshold: _params.councilGovernorProposalThreshold,
-        // Quorum and super-quorum are fixed at one seat; the governor accepts only zero fractions.
+        // Quorum and super-quorum are set in seats; the governor accepts only zero fractions.
         initialQuorumFraction: 0,
         initialSuperQuorumFraction: 0
-      })
+      }),
+      _params.councilGovernorQuorumSeats
     );
 
     // BROADCAST: deploy the Veto Governor
