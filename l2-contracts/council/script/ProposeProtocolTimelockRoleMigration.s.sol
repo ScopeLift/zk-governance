@@ -230,7 +230,7 @@ abstract contract ProposeProtocolTimelockRoleMigration is ZkProtocolUpgradeGover
   // Executes the migration proposal on the current chain state the way `ZkProtocolGovernor` does once it passes: as a
   // timelock batch, scheduled when the proposal is queued and then executed by the governor. For simulation only: it
   // pranks `ZkProtocolGovernor`, so it must not run while broadcasting.
-  function _simulateMigration(Proposal memory _proposal) internal {
+  function _simulateMigration(Proposal memory _proposal) internal virtual {
     TimelockController _timelock = _protocolTimelock();
     bytes32 _salt = keccak256(bytes(_proposal.description));
     vm.prank(_protocolGovernor());

@@ -205,12 +205,17 @@ abstract contract ZkProtocolUpgradeGovernanceTest is TestHelpers, Constants, ZkP
   /// @notice Sets `_holder`'s ZK balance to `_amount` and delegates it to `_holder`. The votes count from the next
   /// second, so call this before the snapshot of the proposal they vote on.
   function _dealAndDelegateZk(address _holder, uint256 _amount) internal {
-    deal(address(zkToken), _holder, _amount);
+    _dealAndDelegateZk(zkToken, _holder, _amount);
+  }
+
+  /// @notice `_dealAndDelegateZk` with the ZK token passed in, for use before `zkToken` is set.
+  function _dealAndDelegateZk(IVotes _zkToken, address _holder, uint256 _amount) internal {
+    deal(address(_zkToken), _holder, _amount);
     vm.prank(_holder);
-    zkToken.delegate(_holder);
+    _zkToken.delegate(_holder);
     // `deal` writes the balance directly, and delegating to the account already delegated to moves no votes, so a
     // holder that delegated before would keep its old votes.
-    require(zkToken.getVotes(_holder) == _amount, "_dealAndDelegateZk: the holder's votes do not match its balance");
+    require(_zkToken.getVotes(_holder) == _amount, "_dealAndDelegateZk: the holder's votes do not match its balance");
   }
 
   /*///////////////////////////////////////////////////////////////

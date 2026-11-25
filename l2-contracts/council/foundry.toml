@@ -16,10 +16,13 @@
 [profile.default]
   auto_detect_remappings = false
   evm_version = "cancun"
-  # The smoke tests deploy OpenZeppelin v4 contracts from the main l2-contracts project's EVM and EraVM artifacts.
+  # The smoke tests deploy OpenZeppelin v4 contracts from the main l2-contracts project's EVM and EraVM artifacts, after
+  # checking them against the sources they were built from.
   fs_permissions = [
     { access = "read", path = "../out" },
     { access = "read", path = "../zkout" },
+    { access = "read", path = "../src" },
+    { access = "read", path = "../lib/openzeppelin-contracts" },
   ]
   libs = ["lib"]
   optimizer = true

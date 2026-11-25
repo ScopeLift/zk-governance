@@ -8,12 +8,11 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ZkProtocolUpgradeDeploymentConfig} from "script/configs/ZkProtocolUpgradeDeploymentConfig.sol";
 import {ZkProtocolUpgradeEraMainnetConfig} from "script/configs/ZkProtocolUpgradeEraMainnetConfig.sol";
 import {ZkProtocolUpgradeGovernanceChecks} from "script/ZkProtocolUpgradeGovernanceChecks.sol";
-import {ProposeProtocolTimelockRoleMigration} from "script/ProposeProtocolTimelockRoleMigration.s.sol";
 import {
   DeployZkProtocolUpgradeGovernanceEraMainnetHarness
 } from "test/harnesses/DeployZkProtocolUpgradeGovernanceHarness.sol";
 import {
-  ProposeProtocolTimelockRoleMigrationEraMainnetHarness
+  ProposeProtocolTimelockRoleMigrationEraMainnetVoteHarness
 } from "test/harnesses/ProposeProtocolTimelockRoleMigrationEraMainnetHarness.sol";
 import {ZkProtocolUpgradeGovernanceTest} from "test/helpers/ZkProtocolUpgradeGovernanceTest.sol";
 import {IZkCheatcodes} from "test/interfaces/IZkCheatcodes.sol";
@@ -28,14 +27,16 @@ import {IZkCheatcodes} from "test/interfaces/IZkCheatcodes.sol";
 /// `DeploySupermajorityGovernor` deploys the override timelock and the Supermajority Governor, which are OpenZeppelin
 /// v4 contracts this project cannot compile. foundry-zksync v0.1.10 cannot run that script here: a broadcast `new` of a
 /// contract this project did not compile panics, because `zkRegisterContract` gives it no factory dependencies. So the
-/// test makes the same deployments and calls from the same deployer with the main project's EraVM bytecode.
-/// `DeployZkProtocolUpgradeGovernanceEraMainnet` then checks them with `SupermajorityGovernorChecks`, the checks
-/// `DeploySupermajorityGovernor` itself runs, and deploys the council contracts, and the Protocol Timelock role
-/// migration proposal from `ProposeProtocolTimelockRoleMigrationEraMainnet` passes through `ZkProtocolGovernor` with a
-/// ZK delegate's votes.
+/// test makes the same deployments and calls from the same deployer with the main project's EraVM bytecode, after
+/// checking that its build is of the sources on disk. The main project's own tests run `DeploySupermajorityGovernor`
+/// itself, on a fork of Era mainnet too. `DeployZkProtocolUpgradeGovernanceEraMainnet` then checks these contracts with
+/// `SupermajorityGovernorChecks`, the checks `DeploySupermajorityGovernor` itself runs, and deploys the council
+/// contracts. Last, `ProposeProtocolTimelockRoleMigrationEraMainnet` runs with every check it makes on mainnet and
+/// proposes the role migration, and the proposal passes through `ZkProtocolGovernor` with the proposer's votes in place
+/// of the script's simulated execution.
 ///
-/// Both deploy scripts run from `DEFAULT_SENDER`, the account a test broadcasts from, as on mainnet, where one account
-/// runs both.
+/// `DEFAULT_SENDER`, the account a test broadcasts from, runs both deploy scripts, as one account does on mainnet, and
+/// also proposes the role migration.
 abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
   ZkProtocolUpgradeGovernanceTest,
   ZkProtocolUpgradeEraMainnetConfig
@@ -121,6 +122,7 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
   function _registerMainProjectContract(string memory _artifact) internal {
     _requireMainProjectArtifact(_mainProjectEvmArtifact(_artifact));
     _requireMainProjectArtifact(string.concat(MAIN_PROJECT_ERAVM_ARTIFACTS, _artifact));
+    _requireCurrentMainProjectBuild(_artifact);
     string memory _evmArtifact = vm.readFile(_mainProjectEvmArtifact(_artifact));
     string memory _eraVmArtifact = vm.readFile(string.concat(MAIN_PROJECT_ERAVM_ARTIFACTS, _artifact));
     bytes memory _evmDeployedBytecode = vm.parseJsonBytes(_evmArtifact, ".deployedBytecode.object");
@@ -139,6 +141,7 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
       );
     // An account derived from the hash, so it holds nothing else and the two contracts' accounts differ.
     vm.etch(address(uint160(uint256(_eraVmBytecodeHash))), _eraVmBytecode);
+    // `KnownCodesStorage` keeps each hash's marker in the slot equal to the hash, and a nonzero marker means known.
     vm.store(KNOWN_CODES_STORAGE, _eraVmBytecodeHash, bytes32(uint256(1)));
   }
 
@@ -148,15 +151,28 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
 
   // Without this, a missing build fails every test with a bare `vm.readFile` error that names neither build.
   function _requireMainProjectArtifact(string memory _path) internal view {
-    require(
-      vm.isFile(_path),
-      string.concat(
-        "setUp: ",
-        _path,
-        " is missing; in l2-contracts, run `forge build src/ZkProtocolGovernor.sol` and",
-        " `forge build --zksync src/ZkProtocolGovernor.sol`"
-      )
-    );
+    require(vm.isFile(_path), string.concat("setUp: ", _path, " is missing; ", MAIN_PROJECT_BUILD_COMMANDS));
+  }
+
+  // A build of older sources would deploy other code than `DeploySupermajorityGovernor` deploys today, and the tests
+  // would still pass. The EVM artifact records the keccak256 of each source it was built from, so each is compared with
+  // the file on disk. zksolc records no sources, so the EraVM artifact is trusted to come from the same build, as the
+  // two build commands produce it.
+  function _requireCurrentMainProjectBuild(string memory _artifact) internal view {
+    string memory _evmArtifactPath = _mainProjectEvmArtifact(_artifact);
+    string memory _evmArtifact = vm.readFile(_evmArtifactPath);
+    string[] memory _sources = vm.parseJsonKeys(_evmArtifact, ".metadata.sources");
+    for (uint256 _i = 0; _i < _sources.length; _i += 1) {
+      string memory _source = string.concat(MAIN_PROJECT_ROOT, _sources[_i]);
+      bytes32 _builtHash =
+        vm.parseJsonBytes32(_evmArtifact, string.concat(".metadata.sources['", _sources[_i], "'].keccak256"));
+      require(
+        keccak256(bytes(vm.readFile(_source))) == _builtHash,
+        string.concat(
+          "setUp: ", _source, " changed since ", _evmArtifactPath, " was built; ", MAIN_PROJECT_BUILD_COMMANDS
+        )
+      );
+    }
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -190,45 +206,28 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
                 Step 3: Protocol Timelock role migration
   //////////////////////////////////////////////////////////////*/
 
-  /// @notice Passes the role migration proposal the script builds through the live `ZkProtocolGovernor`, with the
-  /// script's checks before and after. A delegate with `ZkProtocolGovernor`'s quorum proposes, votes FOR, and queues
-  /// and executes it once the vote ends. Returns `ZkProtocolGovernor`.
+  /// @notice Runs `ProposeProtocolTimelockRoleMigrationEraMainnet` from `DEFAULT_SENDER` with enough votes both to
+  /// propose and to reach `ZkProtocolGovernor`'s quorum alone. Its proposal passes through the live
+  /// `ZkProtocolGovernor` in place of the script's simulated execution, and the script then checks the roles the
+  /// execution left. Returns `ZkProtocolGovernor`.
   function _migrateProtocolTimelockRoles(
     DeploymentParams memory _params,
     ZkProtocolUpgradeGovernanceChecks.Deployment memory _deployment
   ) internal returns (IGovernor _protocolGovernor) {
     IZkCheatcodes(address(vm)).zkVmSkip();
-    ProposeProtocolTimelockRoleMigrationEraMainnetHarness _migration =
-      new ProposeProtocolTimelockRoleMigrationEraMainnetHarness(address(_deployment.vetoGovernor));
+    ProposeProtocolTimelockRoleMigrationEraMainnetVoteHarness _migration =
+      new ProposeProtocolTimelockRoleMigrationEraMainnetVoteHarness(_deployment, DEFAULT_SENDER, DEFAULT_SENDER);
+    _migration.disableLogging();
     _protocolGovernor = IGovernor(_migration.exposed__protocolGovernor());
-    _migration.exposed__checkBeforeMigration();
-    ProposeProtocolTimelockRoleMigration.Proposal memory _proposal = _migration.exposed__migrationProposal();
 
-    // The delegate holds enough votes both to propose and to reach the quorum alone. Its votes count from the next
-    // second, which the governor reads when it proposes.
-    address _delegate = makeAddr("ZkProtocolGovernor Delegate");
-    uint256 _votes = Math.max(_protocolGovernor.quorum(block.timestamp - 1), _protocolGovernor.proposalThreshold());
-    deal(_params.zkToken, _delegate, _votes);
-    vm.prank(_delegate);
-    IVotes(_params.zkToken).delegate(_delegate);
+    // The governor counts votes one tick before its clock, and votes count from the second after they are delegated,
+    // which is when the script proposes.
+    uint256 _votes =
+      Math.max(_protocolGovernor.quorum(_protocolGovernor.clock() - 1), _protocolGovernor.proposalThreshold());
+    _dealAndDelegateZk(IVotes(_params.zkToken), DEFAULT_SENDER, _votes);
     vm.warp(block.timestamp + 1);
 
-    vm.prank(_delegate);
-    uint256 _proposalId =
-      _protocolGovernor.propose(_proposal.targets, _proposal.values, _proposal.calldatas, _proposal.description);
-    vm.warp(_protocolGovernor.proposalSnapshot(_proposalId) + 1);
-    vm.prank(_delegate);
-    _protocolGovernor.castVote(_proposalId, 1);
-    vm.warp(_protocolGovernor.proposalDeadline(_proposalId) + 1);
-    bytes32 _descriptionHash = keccak256(bytes(_proposal.description));
-    _protocolGovernor.queue(_proposal.targets, _proposal.values, _proposal.calldatas, _descriptionHash);
-    _protocolGovernor.execute(_proposal.targets, _proposal.values, _proposal.calldatas, _descriptionHash);
-    require(
-      _protocolGovernor.state(_proposalId) == IGovernor.ProposalState.Executed,
-      "setUp: ZkProtocolGovernor did not execute the role migration"
-    );
-
-    _migration.exposed__checkAfterMigration();
+    _migration.run();
   }
 
   /// @notice Both configurations define the deployment params; the Era mainnet one supplies them.

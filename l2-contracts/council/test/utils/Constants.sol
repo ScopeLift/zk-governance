@@ -24,6 +24,12 @@ contract Constants {
   /// `zkout`.
   string constant MAIN_PROJECT_EVM_ARTIFACTS = "../out/";
   string constant MAIN_PROJECT_ERAVM_ARTIFACTS = "../zkout/";
+  /// @notice The main project's root, relative to this project, which the source paths in its artifacts are relative
+  /// to.
+  string constant MAIN_PROJECT_ROOT = "../";
+  /// @notice What a setup failure about the main project's artifacts tells the reader to run.
+  string constant MAIN_PROJECT_BUILD_COMMANDS =
+    "in l2-contracts, run `forge build src/ZkProtocolGovernor.sol` and `forge build --zksync src/ZkProtocolGovernor.sol`";
 
   /// @notice The main project's artifacts of the contracts `DeploySupermajorityGovernor` deploys, relative to its
   /// artifact directories.
