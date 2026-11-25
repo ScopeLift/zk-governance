@@ -45,6 +45,8 @@ abstract contract ZkProtocolUpgradeEraMainnetConfig is ZkProtocolUpgradeDeployme
       councilGovernorVotingPeriod: 3 days,
       // One seat, so any member can propose.
       councilGovernorProposalThreshold: 1e18,
+      // Two seats, so a proposal passes once two members vote for it.
+      councilGovernorQuorumSeats: 2,
       vetoGovernorName: "ZKsync Protocol Upgrade Veto Governor",
       vetoGovernorVotingDelay: 1 days,
       vetoGovernorVotingPeriod: 5 days,
