@@ -166,9 +166,9 @@ contract Run is DeployZkProtocolUpgradeGovernanceTest {
     assertEq(_vetoGovernor.timelock(), PROTOCOL_TIMELOCK);
     assertEq(_vetoGovernor.owner(), GOVERNANCE_ADMIN);
     assertEq(_vetoGovernor.votingDelay(), 1 days);
-    assertEq(_vetoGovernor.votingPeriod(), 7 days);
+    assertEq(_vetoGovernor.votingPeriod(), 5 days);
     assertEq(_vetoGovernor.vetoThreshold(block.timestamp), 630_000_000e18);
-    assertEq(_vetoGovernor.votingPeriodExtension(), 2 days);
+    assertEq(_vetoGovernor.votingPeriodExtension(), 4 days);
     assertEq(_vetoGovernor.minorVetoExtensionThresholdPct(), 50);
     assertEq(_vetoGovernor.vetoGuardian(), 0xF197677d63BF6E2841F5108b8dFd2FD6eCEff74B);
     assertEq(_vetoGovernor.vetoOverrideRole(), address(_script.overrideTimelock()));

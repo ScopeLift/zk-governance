@@ -47,11 +47,11 @@ abstract contract ZkProtocolUpgradeEraMainnetConfig is ZkProtocolUpgradeDeployme
       councilGovernorProposalThreshold: 1e18,
       vetoGovernorName: "ZKsync Protocol Upgrade Veto Governor",
       vetoGovernorVotingDelay: 1 days,
-      vetoGovernorVotingPeriod: 7 days,
+      vetoGovernorVotingPeriod: 5 days,
       // Zero, since only the Council Governor can propose to the Veto Governor.
       vetoGovernorProposalThreshold: 0,
       vetoGovernorVetoThreshold: 630_000_000e18,
-      vetoGovernorVotingPeriodExtension: 2 days,
+      vetoGovernorVotingPeriodExtension: 4 days,
       // 50% of the 630M ZK veto threshold is 315M ZK.
       vetoGovernorVotingPeriodExtensionThresholdPct: 50,
       vetoGovernorVetoGuardian: 0xF197677d63BF6E2841F5108b8dFd2FD6eCEff74B,
