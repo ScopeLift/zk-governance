@@ -22,11 +22,12 @@ abstract contract ZkProtocolUpgradeDeploymentConfig {
     string councilTokenSymbol;
     uint256 votesPerCouncilSeat;
     address[] councilMembers;
-    // ZkProtocolUpgradeCouncilGovernor. Its quorum and super-quorum are fixed at one seat.
+    // ZkProtocolUpgradeCouncilGovernor. Its quorum and super-quorum are both `councilGovernorQuorumSeats` seats.
     string councilGovernorName;
     uint48 councilGovernorVotingDelay;
     uint32 councilGovernorVotingPeriod;
     uint256 councilGovernorProposalThreshold;
+    uint256 councilGovernorQuorumSeats;
     // ZkProtocolUpgradeVetoGovernor. The extension threshold is a percentage of the veto threshold.
     string vetoGovernorName;
     uint48 vetoGovernorVotingDelay;
