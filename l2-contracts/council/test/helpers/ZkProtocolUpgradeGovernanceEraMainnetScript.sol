@@ -13,8 +13,8 @@ import {
   DeployZkProtocolUpgradeGovernanceEraMainnetHarness
 } from "test/harnesses/DeployZkProtocolUpgradeGovernanceHarness.sol";
 import {
-  ProtocolTimelockRoleMigrationEraMainnetHarness
-} from "test/harnesses/ProtocolTimelockRoleMigrationEraMainnetHarness.sol";
+  ProposeProtocolTimelockRoleMigrationEraMainnetHarness
+} from "test/harnesses/ProposeProtocolTimelockRoleMigrationEraMainnetHarness.sol";
 import {ZkProtocolUpgradeGovernanceTest} from "test/helpers/ZkProtocolUpgradeGovernanceTest.sol";
 import {IZkCheatcodes} from "test/interfaces/IZkCheatcodes.sol";
 
@@ -198,8 +198,8 @@ abstract contract ZkProtocolUpgradeGovernanceEraMainnetScript is
     ZkProtocolUpgradeGovernanceChecks.Deployment memory _deployment
   ) internal returns (IGovernor _protocolGovernor) {
     IZkCheatcodes(address(vm)).zkVmSkip();
-    ProtocolTimelockRoleMigrationEraMainnetHarness _migration =
-      new ProtocolTimelockRoleMigrationEraMainnetHarness(_deployment, DEFAULT_SENDER);
+    ProposeProtocolTimelockRoleMigrationEraMainnetHarness _migration =
+      new ProposeProtocolTimelockRoleMigrationEraMainnetHarness(address(_deployment.vetoGovernor));
     _protocolGovernor = IGovernor(_migration.exposed__protocolGovernor());
     _migration.exposed__checkBeforeMigration();
     ProposeProtocolTimelockRoleMigration.Proposal memory _proposal = _migration.exposed__migrationProposal();
