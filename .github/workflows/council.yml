@@ -4,8 +4,14 @@ name: council
 on:
   workflow_dispatch:
   pull_request:
+    # Draft pull requests run no jobs, to save CI minutes; marking one ready for review runs them.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "l2-contracts/council/**"
+      # The smoke tests deploy the main project's Supermajority Governor and override timelock from its artifacts.
+      - "l2-contracts/src/**"
+      - "l2-contracts/lib/**"
+      - "l2-contracts/foundry.toml"
       - ".github/workflows/council.yml"
       - ".github/actions/**"
       - ".gitmodules"
@@ -14,6 +20,10 @@ on:
       - master
     paths:
       - "l2-contracts/council/**"
+      # The smoke tests deploy the main project's Supermajority Governor and override timelock from its artifacts.
+      - "l2-contracts/src/**"
+      - "l2-contracts/lib/**"
+      - "l2-contracts/foundry.toml"
       - ".github/workflows/council.yml"
       - ".github/actions/**"
       - ".gitmodules"
@@ -25,6 +35,7 @@ env:
 # the 6-hour job limit.
 jobs:
   council-test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     defaults:
       run:
         working-directory: ./l2-contracts/council
@@ -47,12 +58,40 @@ jobs:
         timeout-minutes: 10
         run: git submodule update --init --recursive lib/council-governance
 
+      # The smoke tests deploy the main project's OpenZeppelin v4 Supermajority Governor and override timelock, which
+      # this project cannot compile, from that project's EVM and EraVM artifacts.
+      - name: Install the main l2-contracts project's dependencies
+        timeout-minutes: 10
+        working-directory: ./l2-contracts
+        run: git submodule update --init lib/openzeppelin-contracts lib/openzeppelin-contracts-upgradeable
+
+      # Builds only the Supermajority Governor, which also compiles the override timelock it imports. A whole-project
+      # build would compile the test helpers too, and those need forge-std's own nested submodule. `forge build --zksync`
+      # writes only the EraVM artifacts, so the EVM ones need a plain build too.
+      - name: Build the main l2-contracts project's artifacts
+        timeout-minutes: 30
+        working-directory: ./l2-contracts
+        run: |
+          forge build src/ZkProtocolGovernor.sol
+          forge build --zksync src/ZkProtocolGovernor.sol
+
+      # The smoke tests fork Era mainnet at a pinned block, and foundry caches the state each fork reads. Restoring the
+      # cache spares the public RPC most requests, so a slow or rate-limited RPC is less likely to fail the run.
+      - name: Cache the forked chain state
+        timeout-minutes: 5
+        uses: actions/cache@v4
+        with:
+          path: ~/.foundry/cache/rpc
+          key: foundry-rpc-council-${{ github.sha }}
+          restore-keys: foundry-rpc-council-
+
       # Compiles for both the EVM and EraVM, so there is no separate build step.
       - name: Run forge tests (ZKsync)
         timeout-minutes: 30
         run: forge test --zksync
 
   council-lint:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     defaults:
       run:
         working-directory: ./l2-contracts/council

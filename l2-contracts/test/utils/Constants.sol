@@ -19,6 +19,9 @@ contract Constants {
   bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
   bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
   string constant ZKSYNC_RPC_URL = "https://mainnet.era.zksync.io";
+  /// @notice The Era mainnet block the council smoke tests fork, so the Supermajority Governor deployment is checked
+  /// against the same ZK token state here.
+  uint256 constant ERA_MAINNET_FORK_BLOCK = 72_650_000;
   string constant UPGRADE_DESCRIPTION = "Token Upgrade Proposal";
   address constant L1_MESSENGER_ADDRESS = 0x0000000000000000000000000000000000008008;
 }
